@@ -1,4 +1,6 @@
-# ![ObtainX icon](./assets/graphics/icon_small.png) ObtainX
+# ObtainX
+
+<img alt="ObtainX — get Android app updates straight from the source" src="./fastlane/metadata/android/en-US/images/featureGraphic.png" />
 
 ObtainX builds on everything Obtainium does well — same sources, same trust model, same spirit — with a reworked UI and a set of features aimed at making everyday use a little smoother. For a side-by-side comparison with screenshots, see [ObtainX vs Obtainium](./docs/Difference_with_Obtainium.md).
 
@@ -82,16 +84,61 @@ Features Obtainium has, extended or improved here.
 
 ---
 
-## Screenshots
-| <img src="./assets/screenshots/1.apps.webp" alt="All Apps Page" /> | <img src="./assets/screenshots/2.view_opts.webp" alt="Themes and View Options" /> | <img src="./assets/screenshots/3.filters.webp" alt="Live Filters" /> |
-| ------------------------------------------------------ | ----------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| <img src="./assets/screenshots/4.app.webp" alt="Individual App Page" /> | <img src="./assets/screenshots/5.edit.webp" alt="Editing App Details" /> | <img src="./assets/screenshots/6.options.webp" alt="Additional Options with RegEx Helper" /> |
-| <img src="./assets/screenshots/7.settings.webp" alt="Modern Settings Page, custom category colors" /> | <img src="./assets/screenshots/8.installer_choice.webp" alt="Choose your own installer" /> | <img src="./assets/screenshots/9.bulk_add.webp" alt="Bulk Import from Device" /> |
+## 🖼️ Screenshots
 
-## Screenrecords
+<table>
+<tr>
+<td width="33%" align="center" valign="top">
+<img src="./fastlane/metadata/android/en-US/images/phoneScreenshots/01_apps.jpg" alt="All Apps Page" width="300" /><br />
+</td>
+<td width="33%" align="center" valign="top">
+<img src="./fastlane/metadata/android/en-US/images/phoneScreenshots/02_view_opts.jpg" alt="Themes and View Options" width="300" /><br />
+</td>
+<td width="33%" align="center" valign="top">
+<img src="./fastlane/metadata/android/en-US/images/phoneScreenshots/03_filters.jpg" alt="Live Filters" width="300" /><br />
+</td>
+</tr>
 
-| <video src="https://github.com/user-attachments/assets/de3c59fe-fae3-4177-bb09-473d16065384" width="320" controls muted></video> | <video src="https://github.com/user-attachments/assets/24e726cc-b8cf-40c2-a9fc-b5b0e024300b" width="320" controls muted></video> | <video src="https://github.com/user-attachments/assets/3fb396db-0bd3-40e4-a1e9-a250a2c39aa6" width="320" controls muted></video> |
-| ------ | ------ | ------ |
+<tr>
+<td width="33%" align="center" valign="top">
+<img src="./fastlane/metadata/android/en-US/images/phoneScreenshots/04_app.jpg" alt="Individual App Page" width="300" /><br />
+</td>
+<td width="33%" align="center" valign="top">
+<img src="./fastlane/metadata/android/en-US/images/phoneScreenshots/05_edit.jpg" alt="Editing App Details" width="300" /><br />
+</td>
+<td width="33%" align="center" valign="top">
+<img src="./fastlane/metadata/android/en-US/images/phoneScreenshots/06_options.jpg" alt="Additional Options with RegEx Helper" width="300" /><br />
+</td>
+</tr>
+
+<tr>
+<td width="33%" align="center" valign="top">
+<img src="./fastlane/metadata/android/en-US/images/phoneScreenshots/07_settings.jpg" alt="Modern Settings Page, custom category colors" width="300" /><br />
+</td>
+<td width="33%" align="center" valign="top">
+<img src="./fastlane/metadata/android/en-US/images/phoneScreenshots/08_installer_choice.jpg" alt="Choose your own installer" width="300" /><br />
+</td>
+<td width="33%" align="center" valign="top">
+<img src="./fastlane/metadata/android/en-US/images/phoneScreenshots/09_bulk_add.jpg" alt="Bulk Import from Device" width="300" /><br />
+</td>
+</tr>
+</table>
+
+## 🎥 Screenrecords
+
+<table>
+<tr>
+<td width="33%" align="center" valign="top">
+<video src="https://github.com/user-attachments/assets/de3c59fe-fae3-4177-bb09-473d16065384" width="300" controls muted></video>
+</td>
+<td width="33%" align="center" valign="top">
+<video src="https://github.com/user-attachments/assets/24e726cc-b8cf-40c2-a9fc-b5b0e024300b" width="320" controls muted></video>
+</td>
+<td width="33%" align="center" valign="top">
+<video src="https://github.com/user-attachments/assets/3fb396db-0bd3-40e4-a1e9-a250a2c39aa6" width="320" controls muted></video>
+</td>
+</tr>
+</table>
 
 ## 🔄 Seamlessly bring your data from Obtainium
 

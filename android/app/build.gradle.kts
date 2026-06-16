@@ -62,7 +62,14 @@ android {
         }
         create("fdroid") {
             dimension = "default"
-            applicationIdSuffix = ".fdroid"
+            // Intentionally NO applicationIdSuffix: the F-Droid build shares the
+            // GitHub build's applicationId (dev.bikram.obtainx) and signing key so
+            // updates cross between channels seamlessly. This relies on F-Droid
+            // publishing OUR signed APK via the reproducible-build path (Builds.binary
+            // in the fdroiddata recipe) — do NOT re-add a suffix. The flavor still
+            // exists only to run lib/main_fdroid.dart, which disables self-updating
+            // (F-Droid policy: the store updates the app, it must not update itself).
+            applicationIdSuffix = ""
         }
     }
 
@@ -115,6 +122,14 @@ android {
     }
 }
 
+// Per-ABI versionCode = base * 10 + abi-suffix. Both the GitHub split builds and
+// the F-Droid split builds use this same scheme, so each ABI's APK carries one
+// versionCode across both channels (base 3800 -> x86_64 38001, armeabi-v7a 38002,
+// arm64-v8a 38003) and installs are interchangeable per architecture. The *10
+// multiplier keeps codes in the established 5-digit range so users already on the
+// GitHub builds are never downgraded. The fdroiddata recipe reproduces these codes
+// for auto-update via a VercodeOperation list (%c*10+1 / +2 / +3) — one entry per
+// ABI — so F-Droid auto-detects and builds all three on each release.
 val abiCodes = mapOf("x86_64" to 1, "armeabi-v7a" to 2, "arm64-v8a" to 3)
 
 android.applicationVariants.configureEach {

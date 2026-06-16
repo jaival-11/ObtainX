@@ -26,7 +26,12 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          # Pinned for F-Droid reproducibility: F-Droid rebuilds the fdroid-flavor
+          # APK and diffs it byte-for-byte against the signed release asset, so the
+          # toolchain must be fixed (a floating `channel: stable` would break it).
+          # Keep this EQUAL to the .flutter submodule commit referenced by the
+          # fdroiddata recipe; bump both together when upgrading Flutter.
+          flutter-version: 3.44.2
           cache: true
 
       - name: Cache Gradle packages
@@ -72,25 +77,30 @@ jobs:
 
       - name: Build APKs
         run: |
-          # flutter build apk --flavor normal
-          flutter build apk --split-per-abi --flavor normal
-          for file in build/app/outputs/flutter-apk/app-*normal*.apk*; do mv "$file" "${file//-normal/}"; done
-          rm -f ./build/app/outputs/flutter-apk/*.sha1
-
-      - name: Rename APKs
-        id: rename_apks
-        run: |
-          VERSION=${{ steps.extract_version.outputs.version }}
+          set -e
           APK_DIR=build/app/outputs/flutter-apk
-          for apk in "$APK_DIR"/app-*.apk; do
-            basename=$(basename "$apk")
-            if [ "$basename" = "app-release.apk" ]; then
-              arch=universal
-            else
-              arch=$(echo "$basename" | sed -E 's/^app-(.+)-release\.apk$/\1/')
-            fi
-            mv "$apk" "$APK_DIR/ObtainX-v${VERSION}-${arch}.apk"
+          VERSION=${{ steps.extract_version.outputs.version }}
+
+          # Normal flavor — public GitHub download (in-app self-update enabled).
+          flutter build apk --split-per-abi --flavor normal
+          for f in "$APK_DIR"/app-*-normal-release.apk; do
+            arch=$(basename "$f" | sed -E 's/^app-(.+)-normal-release\.apk$/\1/')
+            mv "$f" "$APK_DIR/ObtainX-v${VERSION}-${arch}.apk"
           done
+
+          # F-Droid flavor — self-update disabled via lib/main_fdroid.dart
+          # Split per-ABI (~24 MB each) so F-Droid downloads stay small. 
+          # The fdroiddata recipe has one entry per ABI (VercodeOperation
+          # list), so auto-update still works, and each entry's binary: points at the
+          # matching file produced here.
+          flutter build apk --split-per-abi --flavor fdroid -t lib/main_fdroid.dart
+          for f in "$APK_DIR"/app-*-fdroid-release.apk; do
+            arch=$(basename "$f" | sed -E 's/^app-(.+)-fdroid-release\.apk$/\1/')
+            mv "$f" "$APK_DIR/ObtainX-v${VERSION}-fdroid-${arch}.apk"
+          done
+
+          rm -f "$APK_DIR"/*.sha1
+          ls -l "$APK_DIR"
 
       - name: Upload APKs
         uses: actions/upload-artifact@v4

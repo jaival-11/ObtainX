@@ -1,0 +1,205 @@
+# =============================================================================
+# F-Droid build recipe for ObtainX — STAGING COPY (lives in the ObtainX repo).
+# Final home: fork gitlab.com/fdroid/fdroiddata and place at
+#   metadata/dev.bikram.obtainx.yml  (filename == the published applicationId;
+#   the fdroid flavor has no suffix, so it's dev.bikram.obtainx).
+#
+# PER-ABI SPLIT + AUTO-UPDATE (modeled on LocalSend's live fdroiddata recipe):
+#   * THREE build blocks, one per ABI (~24 MB each instead of a ~68 MB universal),
+#     each with its own versionCode, output:, and binary:.
+#   * VercodeOperation (10*%c+1 / +2 / +3) + AutoUpdateMode: Version → F-Droid's
+#     bot regenerates all three blocks on every new tag, so there is NO manual
+#     fdroiddata MR per release. The block ORDER below MUST match VercodeOperation
+#     order: x86_64 = +1, armeabi-v7a = +2, arm64-v8a = +3 — which also matches
+#     abiCodes in android/app/build.gradle.kts (base*10+abi → 38001/38002/38003).
+#   * Reproducible (your signing key): each binary: points at the matching signed
+#     GitHub release asset; F-Droid rebuilds, diffs byte-for-byte, and publishes
+#     YOUR APK. AllowedAPKSigningKeys pins your cert.
+#
+# PREREQUISITES in the ObtainX repo:
+#   [DONE] .flutter submodule pinned to Flutter 3.44.2 (c9a6c484...), committed at
+#          the release tag; CI (build.yml) pinned to the same version.
+#   [DONE] build.yml builds + uploads signed fdroid split APKs named
+#          ObtainX-v<ver>-fdroid-<abi>.apk (the binary: targets below).
+#   [TODO] Fill AllowedAPKSigningKeys with the SHA-256 of your release signing
+#          certificate (lowercase hex, no colons). Get it from a signed APK:
+#            apksigner verify --print-certs ObtainX-v2.8.0-fdroid-arm64-v8a.apk
+#          (use the "certificate SHA-256 digest" value).
+#
+# VERIFY before submitting: License (-only vs -or-later), Categories are valid
+#   current F-Droid categories, and the transistor-background-fetch srclib commit
+#   matches the background_fetch (^1.6.0) version ObtainX resolves.
+# =============================================================================
+
+Categories:
+  - App Store & Updater
+  - System
+License: GPL-3.0-only
+AuthorName: Bikram Agarwal
+AuthorWebSite: https://bikram-agarwal.github.io
+SourceCode: https://github.com/bikram-agarwal/ObtainX
+IssueTracker: https://github.com/bikram-agarwal/ObtainX/issues
+Changelog: https://github.com/bikram-agarwal/ObtainX/releases
+
+AutoName: ObtainX
+
+RepoType: git
+Repo: https://github.com/bikram-agarwal/ObtainX.git
+
+Builds:
+  - versionName: 2.8.0
+    versionCode: 38001
+    commit: v2.8.0
+    submodules: true
+    sudo:
+      - mkdir -p /home/runner
+      - chown vagrant /home/runner
+    output: build/app/outputs/flutter-apk/app-x86_64-fdroid-release.apk
+    binary: https://github.com/bikram-agarwal/ObtainX/releases/download/v%v/ObtainX-v%v-fdroid-x86_64.apk
+    srclibs:
+      - reproducible-apk-tools@719c3471fd1bcb807510dc8e035a69e395ca37f4
+      - transistor-background-fetch@0dd1457588ba031f11e9452f125144aac8a9b75f
+    prebuild:
+      - export repo=/home/runner/work/ObtainX
+      - mkdir -p $repo
+      - cd ..
+      - mv dev.bikram.obtainx $repo/ObtainX
+      - pushd $repo/ObtainX
+      - export PUB_CACHE=$(pwd)/.pub-cache
+      - .flutter/bin/flutter config --no-analytics
+      - .flutter/bin/flutter pub get
+      - sed -i -e '/maven {/,/^        }/cmavenLocal()' android/build.gradle .pub-cache/hosted/pub.dev/background_fetch-*/android/build.gradle
+      - popd
+      - mv $repo/ObtainX dev.bikram.obtainx
+    scanignore:
+      - .flutter/bin/cache
+    scandelete:
+      - .flutter
+      - .pub-cache
+    build:
+      - export repo=/home/runner/work/ObtainX
+      - cd ..
+      - mv dev.bikram.obtainx $repo/ObtainX
+      - pushd $repo/ObtainX
+      - pushd $$transistor-background-fetch$$/android/tsbackgroundfetch/
+      - gradle assembleRelease
+      - gradle publishToMavenLocal
+      - popd
+      - export PUB_CACHE=$(pwd)/.pub-cache
+      - .flutter/bin/flutter build apk --release --split-per-abi --target-platform="android-x64" --flavor fdroid -t lib/main_fdroid.dart
+      - popd
+      - mv $repo/ObtainX dev.bikram.obtainx
+    postbuild:
+      - mv $$OUT$$ unaligned.apk
+      - $$reproducible-apk-tools$$/zipalign.py --page-size 16 --pad-like-apksigner --replace unaligned.apk $$OUT$$
+
+  - versionName: 2.8.0
+    versionCode: 38002
+    commit: v2.8.0
+    submodules: true
+    sudo:
+      - mkdir -p /home/runner
+      - chown vagrant /home/runner
+    output: build/app/outputs/flutter-apk/app-armeabi-v7a-fdroid-release.apk
+    binary: https://github.com/bikram-agarwal/ObtainX/releases/download/v%v/ObtainX-v%v-fdroid-armeabi-v7a.apk
+    srclibs:
+      - reproducible-apk-tools@719c3471fd1bcb807510dc8e035a69e395ca37f4
+      - transistor-background-fetch@0dd1457588ba031f11e9452f125144aac8a9b75f
+    prebuild:
+      - export repo=/home/runner/work/ObtainX
+      - mkdir -p $repo
+      - cd ..
+      - mv dev.bikram.obtainx $repo/ObtainX
+      - pushd $repo/ObtainX
+      - export PUB_CACHE=$(pwd)/.pub-cache
+      - .flutter/bin/flutter config --no-analytics
+      - .flutter/bin/flutter pub get
+      - sed -i -e '/maven {/,/^        }/cmavenLocal()' android/build.gradle .pub-cache/hosted/pub.dev/background_fetch-*/android/build.gradle
+      - popd
+      - mv $repo/ObtainX dev.bikram.obtainx
+    scanignore:
+      - .flutter/bin/cache
+    scandelete:
+      - .flutter
+      - .pub-cache
+    build:
+      - export repo=/home/runner/work/ObtainX
+      - cd ..
+      - mv dev.bikram.obtainx $repo/ObtainX
+      - pushd $repo/ObtainX
+      - pushd $$transistor-background-fetch$$/android/tsbackgroundfetch/
+      - gradle assembleRelease
+      - gradle publishToMavenLocal
+      - popd
+      - export PUB_CACHE=$(pwd)/.pub-cache
+      - .flutter/bin/flutter build apk --release --split-per-abi --target-platform="android-arm" --flavor fdroid -t lib/main_fdroid.dart
+      - popd
+      - mv $repo/ObtainX dev.bikram.obtainx
+    postbuild:
+      - mv $$OUT$$ unaligned.apk
+      - $$reproducible-apk-tools$$/zipalign.py --page-size 16 --pad-like-apksigner --replace unaligned.apk $$OUT$$
+
+  - versionName: 2.8.0
+    versionCode: 38003
+    commit: v2.8.0
+    submodules: true
+    sudo:
+      - mkdir -p /home/runner
+      - chown vagrant /home/runner
+    output: build/app/outputs/flutter-apk/app-arm64-v8a-fdroid-release.apk
+    binary: https://github.com/bikram-agarwal/ObtainX/releases/download/v%v/ObtainX-v%v-fdroid-arm64-v8a.apk
+    srclibs:
+      - reproducible-apk-tools@719c3471fd1bcb807510dc8e035a69e395ca37f4
+      - transistor-background-fetch@0dd1457588ba031f11e9452f125144aac8a9b75f
+    prebuild:
+      - export repo=/home/runner/work/ObtainX
+      - mkdir -p $repo
+      - cd ..
+      - mv dev.bikram.obtainx $repo/ObtainX
+      - pushd $repo/ObtainX
+      - export PUB_CACHE=$(pwd)/.pub-cache
+      - .flutter/bin/flutter config --no-analytics
+      - .flutter/bin/flutter pub get
+      - sed -i -e '/maven {/,/^        }/cmavenLocal()' android/build.gradle .pub-cache/hosted/pub.dev/background_fetch-*/android/build.gradle
+      - popd
+      - mv $repo/ObtainX dev.bikram.obtainx
+    scanignore:
+      - .flutter/bin/cache
+    scandelete:
+      - .flutter
+      - .pub-cache
+    build:
+      - export repo=/home/runner/work/ObtainX
+      - cd ..
+      - mv dev.bikram.obtainx $repo/ObtainX
+      - pushd $repo/ObtainX
+      - pushd $$transistor-background-fetch$$/android/tsbackgroundfetch/
+      - gradle assembleRelease
+      - gradle publishToMavenLocal
+      - popd
+      - export PUB_CACHE=$(pwd)/.pub-cache
+      - .flutter/bin/flutter build apk --release --split-per-abi --target-platform="android-arm64" --flavor fdroid -t lib/main_fdroid.dart
+      - popd
+      - mv $repo/ObtainX dev.bikram.obtainx
+    postbuild:
+      - mv $$OUT$$ unaligned.apk
+      - $$reproducible-apk-tools$$/zipalign.py --page-size 16 --pad-like-apksigner --replace unaligned.apk $$OUT$$
+
+# Fill with the SHA-256 of your release signing cert (lowercase hex, no colons) —
+# see the [TODO] in the header. F-Droid uses it to confirm the mirrored APK is
+# signed by you before publishing.
+AllowedAPKSigningKeys: 64:37:E8:BE:94:51:BD:7D:02:21:55:11:D3:E5:04:A8:8C:50:BE:72:B6:DD:05:AC:4B:5B:87:F5:A2:05:B6:87
+
+# Auto-update: the bot watches tags (UpdateCheckMode: Tags), reads the base
+# versionCode from pubspec.yaml (e.g. 3800), then generates one build per
+# VercodeOperation — 10*%c+1/+2/+3 → 38001/38002/38003 — cloning the three blocks
+# above (in order) with the new versionName/versionCode. Matches build.gradle.kts.
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+VercodeOperation:
+  - 10*%c+1
+  - 10*%c+2
+  - 10*%c+3
+UpdateCheckData: pubspec.yaml|version:\s.+\+(\d+)|.|version:\s(.+)\+
+CurrentVersion: 2.8.0
+CurrentVersionCode: 38003
