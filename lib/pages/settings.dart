@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:obtainium/layout_breakpoints.dart';
 import 'package:obtainium/widgets/help_hint_icon.dart';
 import 'package:obtainium/components/app_dropdown_field.dart';
 import 'package:obtainium/components/custom_app_bar.dart';
@@ -62,9 +63,26 @@ class SettingsPage extends StatefulWidget {
   State<SettingsPage> createState() => _SettingsPageState();
 }
 
+/// One entry in the large-screen settings master list (and its detail pane).
+class _SettingsCategory {
+  const _SettingsCategory({
+    required this.key,
+    required this.title,
+    required this.icon,
+    required this.widget,
+  });
+
+  final String key;
+  final String title;
+  final IconData icon;
+  final Widget widget;
+}
+
 class _SettingsPageState extends State<SettingsPage> {
   late final Future<AndroidDeviceInfo> _androidInfo =
       DeviceInfoPlugin().androidInfo;
+
+  String? _selectedCategory;
 
   // ── Scaffold-level subscriptions ────────────────────────────────────
   // We deliberately avoid `context.watch<SettingsProvider>()`: that would
@@ -335,6 +353,298 @@ class _SettingsPageState extends State<SettingsPage> {
       );
     }
 
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final bool isLargeScreen = screenWidth >= kLargeScreenWidthBreakpoint;
+
+    final List<_SettingsCategory> categoriesList = [
+      _SettingsCategory(
+        key: 'updates',
+        title: tr('updates'),
+        icon: Icons.update_rounded,
+        widget: _UpdatesSection(cs: cs, androidInfo: _androidInfo),
+      ),
+      if (sourceProvider.sources.any(
+        (s) => s.sourceConfigSettingFormItems.isNotEmpty,
+      ))
+        _SettingsCategory(
+          key: 'sourceSpecific',
+          title: tr('sourceSpecific'),
+          icon: Icons.dns_rounded,
+          widget: const _SourceSpecificSection(),
+        ),
+      _SettingsCategory(
+        key: 'themes',
+        title: tr('settingsThemesSection'),
+        icon: Icons.palette_rounded,
+        widget: _ThemesSettingsSection(androidInfoFuture: _androidInfo),
+      ),
+      _SettingsCategory(
+        key: 'appearance',
+        title: tr('appearance'),
+        icon: Icons.tune_rounded,
+        widget: _AppearanceSection(androidInfo: _androidInfo),
+      ),
+      _SettingsCategory(
+        key: 'gestures',
+        title: tr('gestures'),
+        icon: Icons.swipe_rounded,
+        widget: const _GesturesSection(),
+      ),
+      _SettingsCategory(
+        key: 'categories',
+        title: tr('categories'),
+        icon: Icons.label_rounded,
+        widget: const _CategoriesSection(),
+      ),
+      _SettingsCategory(
+        key: 'about',
+        title: tr('about'),
+        icon: Icons.info_rounded,
+        widget: settingsCard([AboutSectionContent(colorScheme: cs)]),
+      ),
+    ];
+
+    Widget buildCategoryTile(_SettingsCategory categoryObj) {
+      final String key = categoryObj.key;
+      final String title = categoryObj.title;
+      final IconData icon = categoryObj.icon;
+      final bool selected = _selectedCategory == key;
+
+      final Color containerColor = selected
+          ? cs.secondaryContainer
+          : cs.surfaceContainerHigh;
+      final Color contentColor = selected
+          ? cs.onSecondaryContainer
+          : cs.onSurface;
+
+      final Color iconBoxColor = selected
+          ? cs.primary.withValues(alpha: 0.16)
+          : cs.primaryContainer.withValues(alpha: 0.48);
+
+      final Color iconColor = selected ? cs.primary : cs.onSurfaceVariant;
+
+      final Color chevronColor = cs.onSurfaceVariant;
+
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 8.0),
+        child: Container(
+          decoration: BoxDecoration(
+            color: containerColor,
+            borderRadius: BorderRadius.circular(28),
+          ),
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              onTap: () {
+                setState(() {
+                  _selectedCategory = key;
+                });
+              },
+              borderRadius: BorderRadius.circular(28),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: iconBoxColor,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(icon, color: iconColor, size: 18),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: TextStyle(
+                          fontWeight: selected
+                              ? FontWeight.w600
+                              : FontWeight.w500,
+                          color: contentColor,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      color: chevronColor,
+                      size: 20,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (isLargeScreen) {
+      _selectedCategory ??= categoriesList.first.key;
+      if (!categoriesList.any((c) => c.key == _selectedCategory)) {
+        _selectedCategory = categoriesList.first.key;
+      }
+      final selectedCategoryObj = categoriesList.firstWhere(
+        (c) => c.key == _selectedCategory,
+        orElse: () => categoriesList.first,
+      );
+
+      // Full-bleed page background painted *behind* both panes. The master
+      // pane's app-bar progressive-blur BackdropFilter samples its layer's
+      // backdrop, and in this Row the detail pane is painted after the master
+      // - so without a background here, the strip just past the master's right
+      // edge is transparent-black when the blur rasterizes, and the blur pulls
+      // that darkness into the right end of the master title bar (the two-panel
+      // "dark smudge"). Painting an opaque page background first gives the blur
+      // real pixels to sample at the seam. See custom_app_bar.dart's _buildBlur.
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          Positioned.fill(
+            child: sp.useGradientBackground
+                ? DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: cs.schemePageBackgroundGradient,
+                    ),
+                  )
+                : ColoredBox(color: cs.surface),
+          ),
+          Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: Theme(
+                  data: Theme.of(context).copyWith(
+                    scrollbarTheme: const ScrollbarThemeData(
+                      thumbColor: WidgetStatePropertyAll(Colors.transparent),
+                      trackColor: WidgetStatePropertyAll(Colors.transparent),
+                      trackBorderColor: WidgetStatePropertyAll(
+                        Colors.transparent,
+                      ),
+                      minThumbLength: 0,
+                    ),
+                  ),
+                  child: Scaffold(
+                    backgroundColor: sp.useGradientBackground
+                        ? Colors.transparent
+                        : cs.surface,
+                    body: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        if (sp.useGradientBackground)
+                          Positioned.fill(
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: cs.schemePageBackgroundGradient,
+                              ),
+                            ),
+                          ),
+                        ScrollConfiguration(
+                          behavior: const _NoScrollbarBehavior(),
+                          child: CustomScrollView(
+                            key: const PageStorageKey<String>(
+                              'settings-master-scroll',
+                            ),
+                            slivers: [
+                              CustomAppBar(
+                                title: tr('settings'),
+                                matchGradientBackground:
+                                    sp.useGradientBackground,
+                                progressiveBlurOverlayColor: isLargeScreen
+                                    ? cs.surface.withValues(alpha: 0.72)
+                                    : null,
+                              ),
+                              SliverPadding(
+                                padding: const EdgeInsets.all(16),
+                                sliver: SliverList(
+                                  delegate: SliverChildBuilderDelegate(
+                                    (context, index) => buildCategoryTile(
+                                      categoriesList[index],
+                                    ),
+                                    childCount: categoriesList.length,
+                                  ),
+                                ),
+                              ),
+                              if (sp.progressiveBlurEnabled)
+                                SliverToBoxAdapter(
+                                  child: SizedBox(
+                                    height: MediaQuery.paddingOf(
+                                      context,
+                                    ).bottom,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              VerticalDivider(
+                width: 1,
+                thickness: 1,
+                color: cs.outlineVariant.withAlpha(50),
+              ),
+              Expanded(
+                flex: 4,
+                child: Scaffold(
+                  backgroundColor: sp.useGradientBackground
+                      ? Colors.transparent
+                      : cs.surface,
+                  body: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (sp.useGradientBackground)
+                        Positioned.fill(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: cs.schemePageBackgroundGradient,
+                            ),
+                          ),
+                        ),
+                      CustomScrollView(
+                        key: ValueKey(
+                          'settings-detail-${selectedCategoryObj.key}',
+                        ),
+                        slivers: [
+                          // No top app bar in the detail pane: it carried no
+                          // title, so it only added a blank frosted strip. The
+                          // status-bar inset is preserved with SliverSafeArea so
+                          // the content doesn't slide under the system bar.
+                          SliverSafeArea(
+                            top: true,
+                            bottom: false,
+                            sliver: SliverPadding(
+                              padding: const EdgeInsets.all(16),
+                              sliver: SliverToBoxAdapter(
+                                child: selectedCategoryObj.widget,
+                              ),
+                            ),
+                          ),
+                          if (sp.progressiveBlurEnabled)
+                            SliverToBoxAdapter(
+                              child: SizedBox(
+                                height: MediaQuery.paddingOf(context).bottom,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+
     return Scaffold(
       backgroundColor: cs.surface,
       body: Stack(
@@ -344,17 +654,7 @@ class _SettingsPageState extends State<SettingsPage> {
             Positioned.fill(
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    stops: const [0, 0.38, 0.72, 1],
-                    colors: [
-                      cs.schemePageGradientTopColor,
-                      cs.schemePageGradientMidColor,
-                      cs.surface,
-                      cs.surface,
-                    ],
-                  ),
+                  gradient: cs.schemePageBackgroundGradient,
                 ),
               ),
             ),
@@ -462,7 +762,7 @@ class _SettingsPageState extends State<SettingsPage> {
                             ),
                             aboutSectionHeader(),
                             settingsCard([
-                              _AboutSectionContent(colorScheme: cs),
+                              AboutSectionContent(colorScheme: cs),
                             ]),
                           ],
                         ),
@@ -477,6 +777,19 @@ class _SettingsPageState extends State<SettingsPage> {
         ],
       ),
     );
+  }
+}
+
+class _NoScrollbarBehavior extends MaterialScrollBehavior {
+  const _NoScrollbarBehavior();
+
+  @override
+  Widget buildScrollbar(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
+    return child;
   }
 }
 
@@ -1394,8 +1707,8 @@ class _CategoriesSection extends StatelessWidget {
   }
 }
 
-class _AboutSectionContent extends StatelessWidget {
-  const _AboutSectionContent({required this.colorScheme});
+class AboutSectionContent extends StatelessWidget {
+  const AboutSectionContent({super.key, required this.colorScheme});
 
   final ColorScheme colorScheme;
 
@@ -1403,143 +1716,175 @@ class _AboutSectionContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final SettingsProvider sp = context.read<SettingsProvider>();
     final TextTheme textTheme = Theme.of(context).textTheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          FutureBuilder<PackageInfo?>(
-            future: getInstalledInfo(
-              obtainiumId,
-              printErr: false,
-              includeOwnDebugBuild: true,
-            ),
-            builder: (context, snapshot) {
-              final String versionName =
-                  snapshot.data?.versionName ?? tr('unknown');
-              return Text(
-                tr('aboutAppVersion', args: [versionName]),
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: textTheme.displaySmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: colorScheme.onSurface,
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 6),
-          Text(
-            tr('aboutTagline'),
-            textAlign: TextAlign.center,
-            style: textTheme.bodyMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 18),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final bool isLargeScreen = screenWidth >= kLargeScreenWidthBreakpoint;
+
+    return Stack(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              _AboutImageTile(
-                assetPath: 'assets/graphics/icon_small.png',
-                borderRadius: 24,
-                semanticLabel: tr('about'),
-                fit: BoxFit.contain,
-                backgroundColor: colorScheme.surfaceContainerHighest,
+              FutureBuilder<PackageInfo?>(
+                future: getInstalledInfo(
+                  obtainiumId,
+                  printErr: false,
+                  includeOwnDebugBuild: true,
+                ),
+                builder: (context, snapshot) {
+                  final String versionName =
+                      snapshot.data?.versionName ?? tr('unknown');
+                  return Text(
+                    tr('aboutAppVersion', args: [versionName]),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.displaySmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: colorScheme.onSurface,
+                    ),
+                  );
+                },
               ),
-              const SizedBox(width: 14),
-              _AboutImageTile(
-                assetPath: 'assets/graphics/me_600.webp',
-                borderRadius: 18,
-                semanticLabel: tr('aboutAuthorProfile'),
-                onTap: () => _openAboutUrl(_aboutAuthorUrl),
-                onLongPress: () => _copyAboutUrl(context, _aboutAuthorUrl),
+              const SizedBox(height: 6),
+              Text(
+                tr('aboutTagline'),
+                textAlign: TextAlign.center,
+                style: textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _AboutImageTile(
+                    assetPath: 'assets/graphics/icon_small.png',
+                    borderRadius: 24,
+                    semanticLabel: tr('about'),
+                    fit: BoxFit.contain,
+                    backgroundColor: colorScheme.surfaceContainerHighest,
+                  ),
+                  const SizedBox(width: 14),
+                  _AboutImageTile(
+                    assetPath: 'assets/graphics/me_600.webp',
+                    borderRadius: 18,
+                    semanticLabel: tr('aboutAuthorProfile'),
+                    onTap: () => _openAboutUrl(_aboutAuthorUrl),
+                    onLongPress: () => _copyAboutUrl(context, _aboutAuthorUrl),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text(
+                tr('aboutByline'),
+                textAlign: TextAlign.center,
+                style: textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 18),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 360),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: () => _openAboutUrl(sp.sourceUrl),
+                    onLongPress: () => _copyAboutUrl(context, sp.sourceUrl),
+                    icon: _GitHubMarkIcon(color: colorScheme.onPrimary),
+                    label: Text(tr('aboutStarOnGithub')),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 360),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton.tonalIcon(
+                        style: _aboutSecondaryButtonStyle(colorScheme),
+                        onPressed: () => _openAboutUrl(_aboutWikiUrl),
+                        onLongPress: () =>
+                            _copyAboutUrl(context, _aboutWikiUrl),
+                        icon: const Icon(Icons.open_in_new_rounded),
+                        label: Text(tr('aboutOpenWiki')),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: FilledButton.tonalIcon(
+                        style: _aboutSecondaryButtonStyle(colorScheme),
+                        onPressed: () =>
+                            _shareAboutUrl(sp.sourceUrl, 'ObtainX'),
+                        onLongPress: () => _copyAboutUrl(context, sp.sourceUrl),
+                        icon: const Icon(Icons.share_rounded),
+                        label: Text(tr('share')),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 22),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 360),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        tr('aboutOtherApps'),
+                        style: textTheme.labelLarge?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    _AboutAppPromo(
+                      colorScheme: colorScheme,
+                      assetPath: 'assets/graphics/remember_logo.png',
+                      accentColor: const Color(0xFF74B84A),
+                      name: tr('aboutRememberName'),
+                      tagline: tr('aboutRememberTagline'),
+                      url: _aboutRememberUrl,
+                    ),
+                    const SizedBox(height: 10),
+                    _AboutAppPromo(
+                      colorScheme: colorScheme,
+                      assetPath: 'assets/graphics/filepipe_logo.png',
+                      accentColor: const Color(0xFF5967D8),
+                      name: tr('aboutFilePipeName'),
+                      tagline: tr('aboutFilePipeTagline'),
+                      url: _aboutFilePipeUrl,
+                    ),
+                    const SizedBox(height: 8),
+                    _AboutLegalLinks(colorScheme: colorScheme),
+                  ],
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          Text(
-            tr('aboutByline'),
-            textAlign: TextAlign.center,
-            style: textTheme.bodyMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 18),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 360),
-            child: SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: () => _openAboutUrl(sp.sourceUrl),
-                onLongPress: () => _copyAboutUrl(context, sp.sourceUrl),
-                icon: _GitHubMarkIcon(color: colorScheme.onPrimary),
-                label: Text(tr('aboutStarOnGithub')),
+        ),
+        if (isLargeScreen)
+          Positioned(
+            top: 8,
+            right: 8,
+            child: IconButton(
+              onPressed: () => _openLogsDialog(context),
+              icon: Icon(Icons.bug_report_outlined, color: colorScheme.primary),
+              tooltip: tr('appLogs'),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+              style: IconButton.styleFrom(
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             ),
           ),
-          const SizedBox(height: 10),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 360),
-            child: Row(
-              children: [
-                Expanded(
-                  child: FilledButton.tonalIcon(
-                    style: _aboutSecondaryButtonStyle(colorScheme),
-                    onPressed: () => _openAboutUrl(_aboutWikiUrl),
-                    onLongPress: () => _copyAboutUrl(context, _aboutWikiUrl),
-                    icon: const Icon(Icons.open_in_new_rounded),
-                    label: Text(tr('aboutOpenWiki')),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: FilledButton.tonalIcon(
-                    style: _aboutSecondaryButtonStyle(colorScheme),
-                    onPressed: () => _shareAboutUrl(sp.sourceUrl, 'ObtainX'),
-                    onLongPress: () => _copyAboutUrl(context, sp.sourceUrl),
-                    icon: const Icon(Icons.share_rounded),
-                    label: Text(tr('share')),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 22),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              tr('aboutOtherApps'),
-              style: textTheme.labelLarge?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          _AboutAppPromo(
-            colorScheme: colorScheme,
-            assetPath: 'assets/graphics/remember_logo.png',
-            accentColor: const Color(0xFF74B84A),
-            name: tr('aboutRememberName'),
-            tagline: tr('aboutRememberTagline'),
-            url: _aboutRememberUrl,
-          ),
-          const SizedBox(height: 10),
-          _AboutAppPromo(
-            colorScheme: colorScheme,
-            assetPath: 'assets/graphics/filepipe_logo.png',
-            accentColor: const Color(0xFF5967D8),
-            name: tr('aboutFilePipeName'),
-            tagline: tr('aboutFilePipeTagline'),
-            url: _aboutFilePipeUrl,
-          ),
-          const SizedBox(height: 8),
-          _AboutLegalLinks(colorScheme: colorScheme),
-        ],
-      ),
+      ],
     );
   }
 }

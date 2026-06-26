@@ -79,8 +79,14 @@ enum BulkStep { selectApps, scanning, results }
 class BulkAddWidget extends StatefulWidget {
   final bool standalone;
   final VoidCallback? onComplete;
+  final bool isLargeScreen;
 
-  const BulkAddWidget({super.key, this.standalone = false, this.onComplete});
+  const BulkAddWidget({
+    super.key,
+    this.standalone = false,
+    this.onComplete,
+    required this.isLargeScreen,
+  });
 
   @override
   State<BulkAddWidget> createState() => BulkAddWidgetState();
@@ -738,119 +744,129 @@ class BulkAddWidgetState extends State<BulkAddWidget> {
 
     return Stack(
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(height: 8),
-            _buildAppTypeChipRow(),
-            const SizedBox(height: 8),
-            _buildStoreChipRow(),
-            const SizedBox(height: 8),
-            _buildOptionsChipRow(),
-            const Divider(height: 1),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
+        CustomScrollView(
+          scrollCacheExtent: const ScrollCacheExtent.pixels(1200),
+          slivers: [
+            SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _searchController,
-                      decoration: InputDecoration(
-                        hintText: tr('search'),
-                        prefixIcon: const Icon(Icons.search, size: 18),
-                        isDense: true,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(30),
+                  const SizedBox(height: 8),
+                  _buildAppTypeChipRow(),
+                  const SizedBox(height: 8),
+                  _buildStoreChipRow(),
+                  const SizedBox(height: 8),
+                  _buildOptionsChipRow(),
+                  const Divider(height: 1),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _searchController,
+                            decoration: InputDecoration(
+                              hintText: tr('search'),
+                              prefixIcon: const Icon(Icons.search, size: 18),
+                              isDense: true,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(30),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                            ),
+                            onChanged: (String value) {
+                              _searchDebounceTimer?.cancel();
+                              if (value.isEmpty) {
+                                if (_searchQuery.isNotEmpty) {
+                                  setState(() => _searchQuery = '');
+                                }
+                                return;
+                              }
+                              _searchDebounceTimer = Timer(
+                                _searchDebounceWindow,
+                                () {
+                                  if (!mounted) return;
+                                  if (_searchQuery == value) return;
+                                  setState(() => _searchQuery = value);
+                                },
+                              );
+                            },
+                          ),
                         ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                      ),
-                      onChanged: (String value) {
-                        // Debounced: coalesces fast typing into a single
-                        // setState after the user pauses for the window
-                        // duration. Instant-clear (empty value) skips the
-                        // debounce so the user sees the list reset right
-                        // away when they backspace to nothing.
-                        _searchDebounceTimer?.cancel();
-                        if (value.isEmpty) {
-                          if (_searchQuery.isNotEmpty) {
-                            setState(() => _searchQuery = '');
-                          }
-                          return;
-                        }
-                        _searchDebounceTimer = Timer(_searchDebounceWindow, () {
-                          if (!mounted) return;
-                          if (_searchQuery == value) return;
-                          setState(() => _searchQuery = value);
-                        });
-                      },
-                    ),
-                  ),
-                  if (_searchQuery.isNotEmpty)
-                    IconButton(
-                      icon: Icon(
-                        Icons.close,
-                        size: 20,
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                      onPressed: () {
-                        _searchDebounceTimer?.cancel();
-                        _searchController.clear();
-                        setState(() => _searchQuery = '');
-                      },
-                    ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              child: Row(
-                children: [
-                  Text(
-                    tr(
-                      'selectedX',
-                      args: [
-                        '${_selectedPackages.length}/${_installedApps.length}',
+                        if (_searchQuery.isNotEmpty)
+                          IconButton(
+                            icon: Icon(
+                              Icons.close,
+                              size: 20,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                            onPressed: () {
+                              _searchDebounceTimer?.cancel();
+                              _searchController.clear();
+                              setState(() => _searchQuery = '');
+                            },
+                          ),
                       ],
                     ),
-                    style: Theme.of(context).textTheme.bodySmall,
                   ),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: () => setState(
-                      () => _selectedPackages.addAll(
-                        filtered.map((a) => a.packageName),
-                      ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 6,
                     ),
-                    child: Text(tr('selectAll')),
-                  ),
-                  TextButton(
-                    onPressed: () => setState(
-                      () => _selectedPackages.removeAll(
-                        filtered.map((a) => a.packageName),
-                      ),
+                    child: Row(
+                      children: [
+                        Text(
+                          tr(
+                            'selectedX',
+                            args: [
+                              '${_selectedPackages.length}/${_installedApps.length}',
+                            ],
+                          ),
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        const Spacer(),
+                        TextButton(
+                          onPressed: () => setState(
+                            () => _selectedPackages.addAll(
+                              filtered.map((a) => a.packageName),
+                            ),
+                          ),
+                          child: Text(tr('selectAll')),
+                        ),
+                        TextButton(
+                          onPressed: () => setState(
+                            () => _selectedPackages.removeAll(
+                              filtered.map((a) => a.packageName),
+                            ),
+                          ),
+                          child: Text(tr('deselectAll')),
+                        ),
+                      ],
                     ),
-                    child: Text(tr('deselectAll')),
                   ),
                 ],
               ),
             ),
             if (_loadingApps)
-              Expanded(child: Center(child: _m3LoadingIndicator()))
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(child: _m3LoadingIndicator()),
+              )
             else if (_installedApps.isEmpty)
-              Expanded(child: Center(child: Text(tr('noAppsFound'))))
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(child: Text(tr('noAppsFound'))),
+              )
             else
-              Expanded(
-                child: ListView.builder(
-                  // Bottom padding reserves space so the last item isn't
-                  // hidden behind the FAB.
-                  scrollCacheExtent: const ScrollCacheExtent.pixels(1200),
-                  padding: EdgeInsets.only(bottom: _bottomActionListPadding()),
-                  itemCount: filtered.length,
-                  itemBuilder: (context, index) {
+              SliverPadding(
+                padding: EdgeInsets.only(bottom: _bottomActionListPadding()),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate((context, index) {
                     final app = filtered[index];
                     final selected = _selectedPackages.contains(
                       app.packageName,
@@ -898,7 +914,7 @@ class BulkAddWidgetState extends State<BulkAddWidget> {
                             )
                           : null,
                     );
-                  },
+                  }, childCount: filtered.length),
                 ),
               ),
           ],
@@ -1513,6 +1529,77 @@ class BulkAddWidgetState extends State<BulkAddWidget> {
       }
     }
 
+    final Widget bottomActions = Padding(
+      padding: EdgeInsets.fromLTRB(
+        _bulkBottomActionHorizontalPadding,
+        24,
+        _bulkBottomActionHorizontalPadding,
+        widget.isLargeScreen
+            ? MediaQuery.paddingOf(context).bottom + 16
+            : _bottomActionBottomPadding(),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          if (showProgress) ...[
+            Expanded(child: _buildProgressPill()),
+            const SizedBox(width: 8),
+          ] else
+            const Spacer(),
+          showFabDone
+              ? FloatingActionButton.extended(
+                  heroTag: 'bulkResultsDone',
+                  onPressed: () {
+                    if (widget.standalone) {
+                      Navigator.pop(context);
+                    } else {
+                      widget.onComplete?.call();
+                    }
+                  },
+                  icon: const Icon(Icons.check_rounded),
+                  label: Text(tr('done')),
+                )
+              : _addingApps
+              ? FloatingActionButton.extended(
+                  heroTag: 'bulkResultsCancel',
+                  onPressed: () => setState(() => _addCancelRequested = true),
+                  backgroundColor: colorScheme.errorContainer,
+                  foregroundColor: colorScheme.onErrorContainer,
+                  icon: const Icon(Icons.stop_rounded),
+                  label: Text(tr('cancel')),
+                )
+              : FloatingActionButton.extended(
+                  heroTag: 'bulkResultsAdd',
+                  onPressed: selectedNewFoundCount == 0
+                      ? null
+                      : () {
+                          final List<BulkFoundApp> selectedToAdd = newFound
+                              .where(
+                                (BulkFoundApp a) => _selectedNewFoundPackages
+                                    .contains(a.info.packageName),
+                              )
+                              .toList();
+                          _addFoundApps(selectedToAdd);
+                        },
+                  icon: const Icon(Icons.save_rounded),
+                  label: Text(
+                    tr('addFoundApps', args: ['$selectedNewFoundCount']),
+                  ),
+                ),
+        ],
+      ),
+    );
+
+    if (widget.isLargeScreen) {
+      if (_foundApps.isEmpty &&
+          _notFoundApps.isEmpty &&
+          _cancelledApps.isEmpty) {
+        return Center(child: Text(tr('noAppsFound')));
+      }
+      listItems.add(bottomActions);
+      return ListView(padding: EdgeInsets.zero, children: listItems);
+    }
+
     return Stack(
       children: [
         // Full-height scrollable list; banner is item 0 so it scrolls away.
@@ -1526,72 +1613,7 @@ class BulkAddWidgetState extends State<BulkAddWidget> {
 
         // Bottom row: progress pill (when active, expanding to the left of the
         // FAB) + FAB. Both live in the same Positioned so they stay aligned.
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              _bulkBottomActionHorizontalPadding,
-              0,
-              _bulkBottomActionHorizontalPadding,
-              _bottomActionBottomPadding(),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                if (showProgress) ...[
-                  Expanded(child: _buildProgressPill()),
-                  const SizedBox(width: 8),
-                ] else
-                  const Spacer(),
-                showFabDone
-                    ? FloatingActionButton.extended(
-                        heroTag: 'bulkResultsDone',
-                        onPressed: () {
-                          if (widget.standalone) {
-                            Navigator.pop(context);
-                          } else {
-                            widget.onComplete?.call();
-                          }
-                        },
-                        icon: const Icon(Icons.check_rounded),
-                        label: Text(tr('done')),
-                      )
-                    : _addingApps
-                    ? FloatingActionButton.extended(
-                        heroTag: 'bulkResultsCancel',
-                        onPressed: () =>
-                            setState(() => _addCancelRequested = true),
-                        backgroundColor: colorScheme.errorContainer,
-                        foregroundColor: colorScheme.onErrorContainer,
-                        icon: const Icon(Icons.stop_rounded),
-                        label: Text(tr('cancel')),
-                      )
-                    : FloatingActionButton.extended(
-                        heroTag: 'bulkResultsAdd',
-                        onPressed: selectedNewFoundCount == 0
-                            ? null
-                            : () {
-                                final List<BulkFoundApp> selectedToAdd =
-                                    newFound
-                                        .where(
-                                          (BulkFoundApp a) =>
-                                              _selectedNewFoundPackages
-                                                  .contains(a.info.packageName),
-                                        )
-                                        .toList();
-                                _addFoundApps(selectedToAdd);
-                              },
-                        icon: const Icon(Icons.save_rounded),
-                        label: Text(
-                          tr('addFoundApps', args: ['$selectedNewFoundCount']),
-                        ),
-                      ),
-              ],
-            ),
-          ),
-        ),
+        Positioned(left: 0, right: 0, bottom: 0, child: bottomActions),
       ],
     );
   }

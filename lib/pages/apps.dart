@@ -6,12 +6,18 @@ import 'package:easy_localization/easy_localization.dart' hide TextDirection;
 import 'package:expressive_loading_indicator/expressive_loading_indicator.dart';
 import 'package:expressive_refresh/expressive_refresh.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show ScrollCacheExtent;
+import 'package:flutter/rendering.dart'
+    show
+        ScrollCacheExtent,
+        RenderSliverMainAxisGroup,
+        SliverPhysicalParentData,
+        RenderSliver;
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:progress_indicator_m3e/progress_indicator_m3e.dart';
 import 'package:obtainium/components/bulk_category_editor.dart';
 import 'package:obtainium/components/category_action_chip.dart';
+import 'package:obtainium/layout_breakpoints.dart';
 import 'package:obtainium/components/custom_app_bar.dart';
 import 'package:obtainium/components/generated_form.dart';
 import 'package:obtainium/components/generated_form_modal.dart';
@@ -20,6 +26,7 @@ import 'package:obtainium/main.dart';
 import 'package:obtainium/pages/additional_options_page.dart';
 import 'package:obtainium/pages/page_route_slide_up.dart';
 import 'package:obtainium/pages/app.dart';
+import 'package:obtainium/pages/settings.dart';
 import 'package:obtainium/folders/app_folder.dart';
 import 'package:obtainium/providers/apps_provider.dart';
 import 'package:obtainium/providers/logs_provider.dart';
@@ -90,53 +97,193 @@ Color _appsListGroupHeaderColor(ColorScheme scheme) {
   return header;
 }
 
-/// Collapsed group card; expanded header row uses inner radius on bottom edge.
-RoundedRectangleBorder _appsExpansionTileCollapsedShape(double cardRadius) {
-  return RoundedRectangleBorder(
-    borderRadius: BorderRadius.all(Radius.circular(cardRadius)),
-  );
-}
+class _AppsGroupHeaderDelegate extends SliverPersistentHeaderDelegate {
+  final String title;
+  final int count;
+  final bool isExpanded;
+  final VoidCallback onTap;
+  final double cardRadius;
+  final ColorScheme colorScheme;
 
-RoundedRectangleBorder _appsExpansionTileExpandedShape(double cardRadius) {
-  return RoundedRectangleBorder(
-    borderRadius: BorderRadius.only(
-      topLeft: Radius.circular(cardRadius),
-      topRight: Radius.circular(cardRadius),
-      bottomLeft: const Radius.circular(kM3eInnerRadius),
-      bottomRight: const Radius.circular(kM3eInnerRadius),
-    ),
-  );
-}
+  _AppsGroupHeaderDelegate({
+    required this.title,
+    required this.count,
+    required this.isExpanded,
+    required this.onTap,
+    required this.cardRadius,
+    required this.colorScheme,
+  });
 
-RoundedRectangleBorder _appsExpansionGroupMaterialShape(
-  ColorScheme scheme,
-  double cardRadius,
-) {
-  return RoundedRectangleBorder(
-    borderRadius: BorderRadius.circular(cardRadius),
-    side: m3ePureBlackOutlineSide(scheme, alpha: 0.22),
-  );
-}
+  @override
+  double get minExtent => isExpanded ? 56.0 : 62.0;
 
-Widget _appsGroupedExpansionListBody({
-  required ColorScheme scheme,
-  required List<Widget> tiles,
-}) {
-  return ClipRRect(
-    borderRadius: const BorderRadius.vertical(
-      top: Radius.circular(kM3eInnerRadius),
-    ),
-    child: ColoredBox(
-      color: m3eGroupedListBackdropFill(scheme),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: kM3eHeaderToFirstCardGap),
-          ...tiles,
-        ],
+  @override
+  double get maxExtent => isExpanded ? 56.0 : 62.0;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    final theme = Theme.of(context);
+    final ShapeBorder shape = isExpanded
+        ? RoundedRectangleBorder(
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(cardRadius),
+              topRight: Radius.circular(cardRadius),
+              bottomLeft: const Radius.circular(kM3eInnerRadius),
+              bottomRight: const Radius.circular(kM3eInnerRadius),
+            ),
+            side: m3ePureBlackOutlineSide(colorScheme, alpha: 0.22),
+          )
+        : RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(cardRadius)),
+            side: m3ePureBlackOutlineSide(colorScheme, alpha: 0.22),
+          );
+
+    return Padding(
+      padding: isExpanded
+          ? const EdgeInsets.fromLTRB(12, 6, 12, 0)
+          : const EdgeInsets.fromLTRB(12, 6, 12, 6),
+      child: Material(
+        elevation: 3,
+        shadowColor: colorScheme.shadow.withAlpha(100),
+        surfaceTintColor: colorScheme.surfaceTint,
+        shape: shape,
+        color: _appsListGroupHeaderColor(colorScheme),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: SizedBox(
+            height: 50.0,
+            child: Center(
+              child: ListTile(
+                dense: true,
+                onTap: onTap,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                leading: Icon(
+                  isExpanded
+                      ? Icons.keyboard_arrow_up
+                      : Icons.keyboard_arrow_down,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+                title: Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                trailing: Text(
+                  count.toString(),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
-    ),
-  );
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _AppsGroupHeaderDelegate oldDelegate) {
+    return oldDelegate.title != title ||
+        oldDelegate.count != count ||
+        oldDelegate.isExpanded != isExpanded ||
+        oldDelegate.cardRadius != cardRadius ||
+        oldDelegate.colorScheme != colorScheme;
+  }
+}
+
+class _ZOrderSliverMainAxisGroup extends SliverMainAxisGroup {
+  final double cardRadius;
+
+  const _ZOrderSliverMainAxisGroup({
+    super.key,
+    required super.slivers,
+    required this.cardRadius,
+  });
+
+  @override
+  RenderSliverMainAxisGroup createRenderObject(BuildContext context) {
+    return _RenderZOrderSliverMainAxisGroup(cardRadius: cardRadius);
+  }
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    covariant _RenderZOrderSliverMainAxisGroup renderObject,
+  ) {
+    renderObject.cardRadius = cardRadius;
+  }
+}
+
+class _RenderZOrderSliverMainAxisGroup extends RenderSliverMainAxisGroup {
+  double cardRadius;
+
+  _RenderZOrderSliverMainAxisGroup({required this.cardRadius});
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    if (childCount == 0) {
+      return;
+    }
+    final List<RenderSliver> children = [];
+    RenderSliver? child = firstChild;
+    while (child != null) {
+      children.add(child);
+      child = childAfter(child);
+    }
+
+    double headerTop = 0.0;
+    if (children.isNotEmpty) {
+      final RenderSliver first = children[0];
+      final SliverPhysicalParentData firstParentData =
+          first.parentData! as SliverPhysicalParentData;
+      // Visual top of the header card within the group's coordinate space (adding 6.0 for top padding).
+      headerTop = firstParentData.paintOffset.dy + 6.0;
+    }
+
+    // Paint all content slivers first (from index 1 to N-1)
+    for (int i = 1; i < children.length; i++) {
+      final RenderSliver child = children[i];
+      if (child.geometry?.visible == true) {
+        final SliverPhysicalParentData childParentData =
+            child.parentData! as SliverPhysicalParentData;
+
+        final Rect bounds = Rect.fromLTRB(
+          12.0,
+          headerTop,
+          constraints.crossAxisExtent - 12.0,
+          headerTop + constraints.remainingPaintExtent + 2000.0,
+        );
+
+        final RRect clipRRect = RRect.fromRectAndCorners(
+          bounds,
+          topLeft: Radius.circular(cardRadius),
+          topRight: Radius.circular(cardRadius),
+        );
+
+        context.pushClipRRect(needsCompositing, offset, bounds, clipRRect, (
+          PaintingContext context,
+          Offset offset,
+        ) {
+          context.paintChild(child, offset + childParentData.paintOffset);
+        });
+      }
+    }
+
+    // Paint the pinned header (index 0) last so it renders on top of the scrolling content
+    if (children.isNotEmpty) {
+      final RenderSliver first = children[0];
+      if (first.geometry?.visible == true) {
+        final SliverPhysicalParentData childParentData =
+            first.parentData! as SliverPhysicalParentData;
+        context.paintChild(first, offset + childParentData.paintOffset);
+      }
+    }
+  }
 }
 
 // Android ApplicationInfo flag constants used for app type classification.
@@ -364,6 +511,7 @@ class _AppListItem extends StatelessWidget {
     required this.categoryColors,
     required this.showAppTypeBadge,
     required this.showTrackedStoreBadge,
+    required this.showCheckmark,
     this.sourceHost,
     this.itemBorderRadius,
   });
@@ -380,6 +528,7 @@ class _AppListItem extends StatelessWidget {
   final bool showTrackedStoreBadge;
   final String? sourceHost;
   final BorderRadius? itemBorderRadius;
+  final bool showCheckmark;
 
   @override
   Widget build(BuildContext context) {
@@ -396,6 +545,12 @@ class _AppListItem extends StatelessWidget {
 
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final bool isLargeScreen = screenWidth >= kLargeScreenWidthBreakpoint;
+    final bool hideVersionAndChangelog =
+        isLargeScreen &&
+        MediaQuery.of(context).orientation == Orientation.portrait;
+
     final showChangesFn = getChangeLogFn(context, app.app);
     final installed = app.app.installedVersion;
     final skipActive = isSkipActiveForCurrentLatest(app.app);
@@ -448,6 +603,8 @@ class _AppListItem extends StatelessWidget {
       final trackOnly = app.app.additionalSettings['trackOnly'] == true;
       return IconButton(
         visualDensity: VisualDensity.compact,
+        padding: isLargeScreen ? EdgeInsets.zero : const EdgeInsets.all(8),
+        constraints: isLargeScreen ? const BoxConstraints() : null,
         color: colorScheme.primary,
         tooltip: buildVerificationBlocked
             ? buildVerificationBlockedMessage
@@ -464,6 +621,8 @@ class _AppListItem extends StatelessWidget {
     Widget buildUncertainUpdateButton() {
       return IconButton(
         visualDensity: VisualDensity.compact,
+        padding: isLargeScreen ? EdgeInsets.zero : const EdgeInsets.all(8),
+        constraints: isLargeScreen ? const BoxConstraints() : null,
         color: colorScheme.primary,
         tooltip: buildVerificationBlocked
             ? buildVerificationBlockedMessage
@@ -479,7 +638,7 @@ class _AppListItem extends StatelessWidget {
       return Tooltip(
         message: tr('latestVersionSkipped'),
         child: Padding(
-          padding: const EdgeInsets.all(8),
+          padding: isLargeScreen ? EdgeInsets.zero : const EdgeInsets.all(8),
           child: Icon(
             Icons.skip_next_rounded,
             color: colorScheme.onSurfaceVariant,
@@ -493,81 +652,93 @@ class _AppListItem extends StatelessWidget {
         ? (showChangesFn != null ? tr('changes') : '')
         : DateFormat('yyyy-MM-dd').format(app.app.releaseDate!.toLocal());
 
-    final Widget trailingRow = Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        if (skipActive) ...[
-          buildSkippedVersionIcon(),
-          const SizedBox(width: 5),
-        ],
-        if (!skipActive && hasUpdate) ...[
-          buildUpdateButton(),
-          const SizedBox(width: 5),
-        ],
-        if (!skipActive && !hasUpdate && hasUncertainUpdate) ...[
-          buildUncertainUpdateButton(),
-          const SizedBox(width: 5),
-        ],
-        GestureDetector(
-          onTap: showChangesFn,
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              color: highlightTouchTargets && showChangesFn != null
-                  ? (theme.brightness == Brightness.light
-                            ? theme.primaryColor
-                            : theme.primaryColorLight)
-                        .withAlpha(
-                          theme.brightness == Brightness.light ? 20 : 40,
-                        )
-                  : null,
-            ),
-            padding: highlightTouchTargets
-                ? const EdgeInsetsDirectional.fromSTEB(12, 0, 12, 0)
-                : const EdgeInsetsDirectional.fromSTEB(24, 0, 0, 0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      constraints: BoxConstraints(
-                        maxWidth: MediaQuery.of(context).size.width / 4,
-                      ),
-                      child: Text(
-                        versionText,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.end,
-                        style: isVersionPseudo(app.app)
-                            ? const TextStyle(fontStyle: FontStyle.italic)
-                            : null,
-                      ),
-                    ),
-                  ],
-                ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      changesButtonString,
-                      style: TextStyle(
-                        fontStyle: FontStyle.italic,
-                        decoration: showChangesFn != null
-                            ? TextDecoration.underline
-                            : TextDecoration.none,
-                      ),
-                    ),
-                  ],
-                ),
+    final bool hasTrailingWidgets =
+        skipActive ||
+        (!skipActive && hasUpdate) ||
+        (!skipActive && !hasUpdate && hasUncertainUpdate);
+
+    final Widget? trailingRow = (hideVersionAndChangelog && !hasTrailingWidgets)
+        ? null
+        : Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              if (skipActive) ...[
+                buildSkippedVersionIcon(),
+                if (!hideVersionAndChangelog) const SizedBox(width: 5),
               ],
-            ),
-          ),
-        ),
-      ],
-    );
+              if (!skipActive && hasUpdate) ...[
+                buildUpdateButton(),
+                if (!hideVersionAndChangelog) const SizedBox(width: 5),
+              ],
+              if (!skipActive && !hasUpdate && hasUncertainUpdate) ...[
+                buildUncertainUpdateButton(),
+                if (!hideVersionAndChangelog) const SizedBox(width: 5),
+              ],
+              if (!hideVersionAndChangelog)
+                GestureDetector(
+                  onTap: showChangesFn,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      color: highlightTouchTargets && showChangesFn != null
+                          ? (theme.brightness == Brightness.light
+                                    ? theme.primaryColor
+                                    : theme.primaryColorLight)
+                                .withAlpha(
+                                  theme.brightness == Brightness.light
+                                      ? 20
+                                      : 40,
+                                )
+                          : null,
+                    ),
+                    padding: highlightTouchTargets
+                        ? const EdgeInsetsDirectional.fromSTEB(12, 0, 12, 0)
+                        : const EdgeInsetsDirectional.fromSTEB(24, 0, 0, 0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              constraints: BoxConstraints(
+                                maxWidth: MediaQuery.of(context).size.width / 4,
+                              ),
+                              child: Text(
+                                versionText,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.end,
+                                style: isVersionPseudo(app.app)
+                                    ? const TextStyle(
+                                        fontStyle: FontStyle.italic,
+                                      )
+                                    : null,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              changesButtonString,
+                              style: TextStyle(
+                                fontStyle: FontStyle.italic,
+                                decoration: showChangesFn != null
+                                    ? TextDecoration.underline
+                                    : TextDecoration.none,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          );
 
     Widget buildDownloadProgressControl() {
       final double activeDownloadProgress = downloadProgress ?? 0;
@@ -681,7 +852,7 @@ class _AppListItem extends StatelessWidget {
     // outline and 1dp lift) and is what makes selection unmistakable in
     // multi-select mode without leaning on a fill that would collide
     // with the pinned-row tonal fill.
-    final Widget leadingIconForSlot = isSelected
+    final Widget leadingIconForSlot = showCheckmark
         ? Container(
             width: 40,
             height: 40,
@@ -699,25 +870,27 @@ class _AppListItem extends StatelessWidget {
         : iconWithBadge;
 
     // Leading = [icon+type-badge or check] + [store column] inside ListTile.leading.
-    // Store column always rendered (keeps title position stable); badge shown
-    // only when showTrackedStoreBadge is true and sourceHost is known.
+    // Store column keeps title position stable when showTrackedStoreBadge is true;
+    // collapses when showTrackedStoreBadge is false so content on the right can expand.
     final Widget leadingWidget = Row(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         leadingIconForSlot,
-        const SizedBox(width: 6),
-        SizedBox(
-          width: 20,
-          child: Center(
-            child: (showTrackedStoreBadge && sourceHost != null)
-                ? Transform.scale(
-                    scale: 1.25,
-                    child: StoreSourceListBadge(host: sourceHost!),
-                  )
-                : null,
+        if (showTrackedStoreBadge) ...[
+          const SizedBox(width: 6),
+          SizedBox(
+            width: 20,
+            child: Center(
+              child: sourceHost != null
+                  ? Transform.scale(
+                      scale: 1.25,
+                      child: StoreSourceListBadge(host: sourceHost!),
+                    )
+                  : null,
+            ),
           ),
-        ),
+        ],
       ],
     );
 
@@ -779,6 +952,9 @@ class _AppListItem extends StatelessWidget {
           selectedTileColor: Colors.transparent,
           selected: isSelected,
           onLongPress: onLongPress,
+          contentPadding: isLargeScreen
+              ? const EdgeInsets.symmetric(horizontal: 12)
+              : null,
           leading: leadingWidget,
           title: Row(
             children: [
@@ -1995,6 +2171,16 @@ class _ScrollLinkedAppFooterState extends State<_ScrollLinkedAppFooter> {
 const String _onDemandViewSettingsId = '__on_demand_only__';
 
 class AppsPageState extends State<AppsPage> {
+  GlobalKey<NavigatorState>? detailsNavKey;
+  String? _detailsNavKeyAppId;
+  GlobalKey<NavigatorState> _getDetailsNavKey(String appId) {
+    if (_detailsNavKeyAppId != appId || detailsNavKey == null) {
+      detailsNavKey = GlobalKey<NavigatorState>();
+      _detailsNavKeyAppId = appId;
+    }
+    return detailsNavKey!;
+  }
+
   AppsFilter filter = AppsFilter();
   final AppsFilter neutralFilter = AppsFilter();
   var updatesOnlyFilter = AppsFilter(
@@ -2019,6 +2205,13 @@ class AppsPageState extends State<AppsPage> {
   /// this tab is active. Returns true if the back event was consumed.
   bool handleBack() {
     if (clearSelected()) return true;
+    final navKey = detailsNavKey;
+    if (navKey != null &&
+        navKey.currentState != null &&
+        navKey.currentState!.canPop()) {
+      navKey.currentState!.pop();
+      return true;
+    }
     if (_searchExpanded) {
       setState(() {
         _searchExpanded = false;
@@ -2095,7 +2288,6 @@ class AppsPageState extends State<AppsPage> {
   // Groups start expanded. When the user collapses one its key goes here and
   // its child tiles are no longer built, saving widget-tree work on rebuilds.
   final Set<String> _collapsedGroups = {};
-  final Map<String, ExpansibleController> _groupControllers = {};
 
   // ── Hero keep-alive ───────────────────────────────────────────────────────
   // Removed: previously held the appId of the row whose AppPage was open so
@@ -2118,6 +2310,9 @@ class AppsPageState extends State<AppsPage> {
 
   /// Whether the search bar is currently expanded.
   bool _searchExpanded = false;
+
+  /// The currently selected app's ID for split-pane layout.
+  String? selectedAppId;
   final FocusNode _searchFocusNode = FocusNode();
 
   String _searchFieldValue(String field) => switch (field) {
@@ -2204,9 +2399,24 @@ class AppsPageState extends State<AppsPage> {
     _changingSearchField = false;
   }
 
+  void _saveCollapsedGroups(List<String> keys, {required bool add}) {
+    final sp = context.read<SettingsProvider>();
+    final current = sp.prefs?.getStringList('collapsedGroups')?.toSet() ?? {};
+    if (add) {
+      current.addAll(keys);
+    } else {
+      current.removeAll(keys);
+    }
+    sp.prefs?.setStringList('collapsedGroups', current.toList());
+  }
+
   @override
   void initState() {
     super.initState();
+    final sp = context.read<SettingsProvider>();
+    _collapsedGroups.addAll(
+      sp.prefs?.getStringList('collapsedGroups') ?? const <String>[],
+    );
     scrollController = ScrollController();
     _searchController = TextEditingController();
     _searchController.addListener(() {
@@ -2214,6 +2424,15 @@ class AppsPageState extends State<AppsPage> {
       final text = _searchController.text;
       if (text != _searchFieldValue(_searchField)) {
         setState(() => _applySearchText(_searchField, text));
+      }
+    });
+    _searchFocusNode.addListener(() {
+      if (!_searchFocusNode.hasFocus &&
+          _searchController.text.isEmpty &&
+          _searchExpanded) {
+        setState(() {
+          _searchExpanded = false;
+        });
       }
     });
   }
@@ -2224,7 +2443,6 @@ class AppsPageState extends State<AppsPage> {
     scrollController.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
-    _groupControllers.clear();
     super.dispose();
   }
 
@@ -2256,14 +2474,16 @@ class AppsPageState extends State<AppsPage> {
       autofocus: true,
       decoration: InputDecoration(
         hintText: tr('search'),
-        prefixIcon: const Icon(Icons.search, size: 18),
         isDense: true,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(30)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        suffix: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            GestureDetector(
+        suffixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+        suffixIcon: Padding(
+          padding: const EdgeInsetsDirectional.only(end: 10),
+          child: Align(
+            alignment: Alignment.center,
+            widthFactor: 1,
+            child: GestureDetector(
               onTap: showFilterSheet,
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
@@ -2299,7 +2519,7 @@ class AppsPageState extends State<AppsPage> {
                 ),
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -2869,6 +3089,34 @@ class AppsPageState extends State<AppsPage> {
     }
     // ── Use cached results ──────────────────────────────────────────────────
     var listedApps = _listedAppsCache;
+
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final bool isLargeScreen = screenWidth >= kLargeScreenWidthBreakpoint;
+
+    // The two-panel layout needs an effective selection, but mutating
+    // [selectedAppId] during build is a Flutter anti-pattern. Derive it locally
+    // for this frame, then reconcile the persisted field after the frame so
+    // taps and later reads stay consistent.
+    String? effectiveSelectedAppId = selectedAppId;
+    if (isLargeScreen) {
+      if (effectiveSelectedAppId == null && listedApps.isNotEmpty) {
+        effectiveSelectedAppId = listedApps.first.app.id;
+      } else if (effectiveSelectedAppId != null &&
+          !listedApps.any((sa) => sa.app.id == effectiveSelectedAppId)) {
+        effectiveSelectedAppId = listedApps.isNotEmpty
+            ? listedApps.first.app.id
+            : null;
+      }
+      if (effectiveSelectedAppId != selectedAppId) {
+        final String? reconciled = effectiveSelectedAppId;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && selectedAppId != reconciled) {
+            setState(() => selectedAppId = reconciled);
+          }
+        });
+      }
+    }
+
     final existingUpdates = _existingUpdatesCache;
     final newInstalls = _newInstallsCache;
     final int onDemandOnlyAppCount = appsProvider.apps.values
@@ -3187,25 +3435,28 @@ class AppsPageState extends State<AppsPage> {
     final listedAppTypes = _listedAppTypesCache;
 
     List<String> getActiveGroupKeys() {
+      final folderPrefix = widget.folderId != null
+          ? 'folder_${widget.folderId}_'
+          : '';
       final List<String> keys = [];
       if (effectiveGroupBy == AppsListGroupBy.category) {
         for (final category in listedCategories) {
-          keys.add('cat:${category ?? '__null__'}');
+          keys.add('${folderPrefix}cat:${category ?? '__null__'}');
         }
       } else if (effectiveGroupBy == AppsListGroupBy.source) {
         for (final source in listedSources) {
-          keys.add('src:$source');
+          keys.add('${folderPrefix}src:$source');
         }
       } else if (effectiveGroupBy == AppsListGroupBy.appType) {
         for (final type in listedAppTypes) {
-          keys.add('appType:${type.name}');
+          keys.add('${folderPrefix}appType:${type.name}');
         }
       }
       if (showNonInstalledGroupSection) {
-        keys.add('__nonInstalled__');
+        keys.add('${folderPrefix}__nonInstalled__');
       }
       if (showUpdatesGroupSection) {
-        keys.add('__updates__');
+        keys.add('${folderPrefix}__updates__');
       }
       return keys;
     }
@@ -3353,6 +3604,9 @@ class AppsPageState extends State<AppsPage> {
             )
           : null;
 
+      final double screenWidth = MediaQuery.of(context).size.width;
+      final bool isLargeScreen = screenWidth >= kLargeScreenWidthBreakpoint;
+
       // Builds the row visual given the callback that should fire when the
       // user taps a non-selected row. Used by both the OpenContainer path
       // (callback = openContainer) and the [reduceVisualEffects] fallback
@@ -3370,7 +3624,12 @@ class AppsPageState extends State<AppsPage> {
         appsListHeroFolderId: widget.folderId,
         child: _AppListItem(
           appId: appId,
-          isSelected: selectedAppIds.contains(appId),
+          isSelected:
+              selectedAppIds.contains(appId) ||
+              (isLargeScreen &&
+                  effectiveSelectedAppId == appId &&
+                  selectedAppIds.isEmpty),
+          showCheckmark: selectedAppIds.contains(appId),
           areDownloadsRunning: downloadsRunning,
           iconWidget: getAppIcon(index),
           sourceHost: sourceHost,
@@ -3407,7 +3666,9 @@ class AppsPageState extends State<AppsPage> {
       // The icon's own onLongPress (which opens AppPage with the opposite
       // view) still uses the standard Navigator.push - that's a secondary
       // path and doesn't benefit from container transform.
-      final Widget swipeItem = settingsProvider.reduceVisualEffects
+      final Widget swipeItem = isLargeScreen
+          ? buildRowWith(() => setState(() => selectedAppId = appId))
+          : settingsProvider.reduceVisualEffects
           ? buildRowWith(
               () => Navigator.push(
                 context,
@@ -3510,151 +3771,118 @@ class AppsPageState extends State<AppsPage> {
       ];
     }
 
-    getCategoryCollapsibleTile(int index) {
-      final catKey = 'cat:${listedCategories[index] ?? '__null__'}';
-      final isExpanded = !_collapsedGroups.contains(catKey);
-      final controller = _groupControllers.putIfAbsent(
-        catKey,
-        () => ExpansibleController(),
-      );
-
-      final String categoryMapKey = listedCategories[index] ?? '__null__';
-      final matchingIndices =
-          _categoryGroupListedIndices[categoryMapKey] ?? const <int>[];
+    Widget buildCollapsibleTile({
+      required String groupKey,
+      required String title,
+      required List<int> matchingIndices,
+    }) {
+      final isExpanded = !_collapsedGroups.contains(groupKey);
       final tiles = isExpanded
           ? buildGroupedChildren(matchingIndices)
           : const <Widget>[];
-
-      capFirstChar(String str) => str[0].toUpperCase() + str.substring(1);
       final theme = Theme.of(context);
-      return RepaintBoundary(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
-          child: Material(
-            elevation: 3,
-            shadowColor: theme.colorScheme.shadow.withAlpha(100),
-            surfaceTintColor: theme.colorScheme.surfaceTint,
-            shape: _appsExpansionGroupMaterialShape(
-              theme.colorScheme,
-              appsListGroupCardRadius,
-            ),
-            color: _appsListGroupHeaderColor(theme.colorScheme),
-            clipBehavior: Clip.antiAlias,
-            child: Theme(
-              data: theme.copyWith(dividerColor: Colors.transparent),
-              child: ExpansionTile(
-                controller: controller,
-                key: PageStorageKey(catKey),
-                shape: _appsExpansionTileExpandedShape(appsListGroupCardRadius),
-                collapsedShape: _appsExpansionTileCollapsedShape(
-                  appsListGroupCardRadius,
-                ),
-                initiallyExpanded: isExpanded,
-                onExpansionChanged: (expanded) => setState(() {
-                  if (expanded) {
-                    _collapsedGroups.remove(catKey);
+      return _ZOrderSliverMainAxisGroup(
+        key: PageStorageKey(groupKey),
+        cardRadius: appsListGroupCardRadius,
+        slivers: [
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: _AppsGroupHeaderDelegate(
+              title: title,
+              count: matchingIndices.length,
+              isExpanded: isExpanded,
+              cardRadius: appsListGroupCardRadius,
+              colorScheme: theme.colorScheme,
+              onTap: () {
+                setState(() {
+                  if (isExpanded) {
+                    _collapsedGroups.add(groupKey);
                   } else {
-                    _collapsedGroups.add(catKey);
+                    _collapsedGroups.remove(groupKey);
                   }
-                }),
-                title: Text(
-                  capFirstChar(listedCategories[index] ?? tr('noCategory')),
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                controlAffinity: ListTileControlAffinity.leading,
-                trailing: Text(matchingIndices.length.toString()),
-                childrenPadding: EdgeInsets.zero,
-                children: [
-                  _appsGroupedExpansionListBody(
-                    scheme: theme.colorScheme,
-                    tiles: tiles,
-                  ),
-                ],
-              ),
+                  _saveCollapsedGroups([groupKey], add: isExpanded);
+                });
+              },
             ),
           ),
-        ),
+          if (isExpanded && tiles.isNotEmpty)
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+              sliver: DecoratedSliver(
+                decoration: BoxDecoration(
+                  color: settingsProvider.useGradientBackground
+                      ? Colors.transparent
+                      : m3eGroupedListBackdropFill(theme.colorScheme),
+                  borderRadius: BorderRadius.vertical(
+                    bottom: Radius.circular(appsListGroupCardRadius),
+                  ),
+                  border: Border(
+                    left: m3ePureBlackOutlineSide(
+                      theme.colorScheme,
+                      alpha: 0.22,
+                    ),
+                    right: m3ePureBlackOutlineSide(
+                      theme.colorScheme,
+                      alpha: 0.22,
+                    ),
+                    bottom: m3ePureBlackOutlineSide(
+                      theme.colorScheme,
+                      alpha: 0.22,
+                    ),
+                  ),
+                ),
+                sliver: SliverPadding(
+                  padding: const EdgeInsets.only(top: kM3eHeaderToFirstCardGap),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) => tiles[index],
+                      childCount: tiles.length,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      );
+    }
+
+    getCategoryCollapsibleTile(int index) {
+      final folderPrefix = widget.folderId != null
+          ? 'folder_${widget.folderId}_'
+          : '';
+      final catKey =
+          '${folderPrefix}cat:${listedCategories[index] ?? '__null__'}';
+      final String categoryMapKey = listedCategories[index] ?? '__null__';
+      final matchingIndices =
+          _categoryGroupListedIndices[categoryMapKey] ?? const <int>[];
+      capFirstChar(String str) => str[0].toUpperCase() + str.substring(1);
+      final title = capFirstChar(listedCategories[index] ?? tr('noCategory'));
+      return buildCollapsibleTile(
+        groupKey: catKey,
+        title: title,
+        matchingIndices: matchingIndices,
       );
     }
 
     getNonInstalledCollapsibleTile() {
-      const nonInstalledKey = '__nonInstalled__';
-      final isExpanded = !_collapsedGroups.contains(nonInstalledKey);
-      final controller = _groupControllers.putIfAbsent(
-        nonInstalledKey,
-        () => ExpansibleController(),
-      );
-
-      final matchingIndices = _nonInstalledListedIndices;
-      final tiles = isExpanded
-          ? buildGroupedChildren(matchingIndices)
-          : const <Widget>[];
-
-      final theme = Theme.of(context);
-      return RepaintBoundary(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
-          child: Material(
-            elevation: 3,
-            shadowColor: theme.colorScheme.shadow.withAlpha(100),
-            surfaceTintColor: theme.colorScheme.surfaceTint,
-            shape: _appsExpansionGroupMaterialShape(
-              theme.colorScheme,
-              appsListGroupCardRadius,
-            ),
-            color: _appsListGroupHeaderColor(theme.colorScheme),
-            clipBehavior: Clip.antiAlias,
-            child: Theme(
-              data: theme.copyWith(dividerColor: Colors.transparent),
-              child: ExpansionTile(
-                controller: controller,
-                key: const PageStorageKey(nonInstalledKey),
-                shape: _appsExpansionTileExpandedShape(appsListGroupCardRadius),
-                collapsedShape: _appsExpansionTileCollapsedShape(
-                  appsListGroupCardRadius,
-                ),
-                initiallyExpanded: isExpanded,
-                onExpansionChanged: (expanded) => setState(() {
-                  if (expanded) {
-                    _collapsedGroups.remove(nonInstalledKey);
-                  } else {
-                    _collapsedGroups.add(nonInstalledKey);
-                  }
-                }),
-                title: Text(
-                  tr('notInstalled'),
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                controlAffinity: ListTileControlAffinity.leading,
-                trailing: Text(matchingIndices.length.toString()),
-                childrenPadding: EdgeInsets.zero,
-                children: [
-                  _appsGroupedExpansionListBody(
-                    scheme: theme.colorScheme,
-                    tiles: tiles,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
+      final folderPrefix = widget.folderId != null
+          ? 'folder_${widget.folderId}_'
+          : '';
+      return buildCollapsibleTile(
+        groupKey: '${folderPrefix}__nonInstalled__',
+        title: tr('notInstalled'),
+        matchingIndices: _nonInstalledListedIndices,
       );
     }
 
     getSourceCollapsibleTile(int index) {
       final sourceKey = listedSources[index];
-      final groupKey = 'src:$sourceKey';
-      final isExpanded = !_collapsedGroups.contains(groupKey);
-      final controller = _groupControllers.putIfAbsent(
-        groupKey,
-        () => ExpansibleController(),
-      );
-
+      final folderPrefix = widget.folderId != null
+          ? 'folder_${widget.folderId}_'
+          : '';
+      final groupKey = '${folderPrefix}src:$sourceKey';
       final matchingIndices =
           _sourceGroupListedIndices[sourceKey] ?? const <int>[];
-      final tiles = isExpanded
-          ? buildGroupedChildren(matchingIndices)
-          : const <Widget>[];
 
       final AppInMemory firstForTitle = matchingIndices.isEmpty
           ? listedApps.firstWhere(
@@ -3676,124 +3904,18 @@ class AppsPageState extends State<AppsPage> {
           )
           .name;
 
-      final theme = Theme.of(context);
-      return RepaintBoundary(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
-          child: Material(
-            elevation: 3,
-            shadowColor: theme.colorScheme.shadow.withAlpha(100),
-            surfaceTintColor: theme.colorScheme.surfaceTint,
-            shape: _appsExpansionGroupMaterialShape(
-              theme.colorScheme,
-              appsListGroupCardRadius,
-            ),
-            color: _appsListGroupHeaderColor(theme.colorScheme),
-            clipBehavior: Clip.antiAlias,
-            child: Theme(
-              data: theme.copyWith(dividerColor: Colors.transparent),
-              child: ExpansionTile(
-                controller: controller,
-                key: PageStorageKey(groupKey),
-                shape: _appsExpansionTileExpandedShape(appsListGroupCardRadius),
-                collapsedShape: _appsExpansionTileCollapsedShape(
-                  appsListGroupCardRadius,
-                ),
-                initiallyExpanded: isExpanded,
-                onExpansionChanged: (expanded) => setState(() {
-                  if (expanded) {
-                    _collapsedGroups.remove(groupKey);
-                  } else {
-                    _collapsedGroups.add(groupKey);
-                  }
-                }),
-                title: Text(
-                  sourceTitle,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                controlAffinity: ListTileControlAffinity.leading,
-                trailing: Text(matchingIndices.length.toString()),
-                childrenPadding: EdgeInsets.zero,
-                children: [
-                  _appsGroupedExpansionListBody(
-                    scheme: theme.colorScheme,
-                    tiles: tiles,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    // ── Generic collapsible group tile ──────────────────────────────────────
-    Widget buildCollapsibleTile({
-      required String groupKey,
-      required String title,
-      required List<int> matchingIndices,
-    }) {
-      final isExpanded = !_collapsedGroups.contains(groupKey);
-      final controller = _groupControllers.putIfAbsent(
-        groupKey,
-        () => ExpansibleController(),
-      );
-      final tiles = isExpanded
-          ? buildGroupedChildren(matchingIndices)
-          : const <Widget>[];
-      final theme = Theme.of(context);
-      return RepaintBoundary(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
-          child: Material(
-            elevation: 3,
-            shadowColor: theme.colorScheme.shadow.withAlpha(100),
-            surfaceTintColor: theme.colorScheme.surfaceTint,
-            shape: _appsExpansionGroupMaterialShape(
-              theme.colorScheme,
-              appsListGroupCardRadius,
-            ),
-            color: _appsListGroupHeaderColor(theme.colorScheme),
-            clipBehavior: Clip.antiAlias,
-            child: Theme(
-              data: theme.copyWith(dividerColor: Colors.transparent),
-              child: ExpansionTile(
-                controller: controller,
-                key: PageStorageKey(groupKey),
-                shape: _appsExpansionTileExpandedShape(appsListGroupCardRadius),
-                collapsedShape: _appsExpansionTileCollapsedShape(
-                  appsListGroupCardRadius,
-                ),
-                initiallyExpanded: isExpanded,
-                onExpansionChanged: (expanded) => setState(() {
-                  if (expanded) {
-                    _collapsedGroups.remove(groupKey);
-                  } else {
-                    _collapsedGroups.add(groupKey);
-                  }
-                }),
-                title: Text(
-                  title,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                controlAffinity: ListTileControlAffinity.leading,
-                trailing: Text(matchingIndices.length.toString()),
-                childrenPadding: EdgeInsets.zero,
-                children: [
-                  _appsGroupedExpansionListBody(
-                    scheme: theme.colorScheme,
-                    tiles: tiles,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
+      return buildCollapsibleTile(
+        groupKey: groupKey,
+        title: sourceTitle,
+        matchingIndices: matchingIndices,
       );
     }
 
     getAppTypeCollapsibleTile(AppTypeGroup type) {
-      final String groupKey = 'appType:${type.name}';
+      final folderPrefix = widget.folderId != null
+          ? 'folder_${widget.folderId}_'
+          : '';
+      final String groupKey = '${folderPrefix}appType:${type.name}';
       final matchingIndices = _appTypeGroupListedIndices[type] ?? const <int>[];
       final String title = switch (type) {
         AppTypeGroup.user => tr('appTypeUser'),
@@ -3808,8 +3930,11 @@ class AppsPageState extends State<AppsPage> {
     }
 
     getUpdatesCollapsibleTile() {
+      final folderPrefix = widget.folderId != null
+          ? 'folder_${widget.folderId}_'
+          : '';
       return buildCollapsibleTile(
-        groupKey: '__updates__',
+        groupKey: '${folderPrefix}__updates__',
         title: tr('updatesGroup'),
         matchingIndices: _updatesGroupListedIndices,
       );
@@ -4044,6 +4169,63 @@ class AppsPageState extends State<AppsPage> {
       Navigator.of(context).pop();
     }
 
+    // Shared bulk-action bodies, used by both the phone "more options" dialog
+    // and the large-screen action pane. They intentionally do not dismiss any
+    // surface — the phone dialog pops at its own call sites; the pane stays.
+    downloadSelectedAppAssets() {
+      appsProvider
+          .downloadAppAssets(
+            selectedApps.map((e) => e.id).toList(),
+            globalNavigatorKey.currentContext ?? context,
+          )
+          .catchError((e) {
+            showError(e, globalNavigatorKey.currentContext ?? context);
+            return <String>[];
+          });
+    }
+
+    shareSelectedAppUrls() {
+      String urls = '';
+      for (var a in selectedApps) {
+        urls += '${a.url}\n';
+      }
+      urls = urls.substring(0, urls.length - 1);
+      SharePlus.instance.share(
+        ShareParams(text: urls, subject: 'ObtainX - ${tr('appsString')}'),
+      );
+    }
+
+    shareSelectedAppConfigLinks() {
+      String urls = '';
+      for (var a in selectedApps) {
+        urls +=
+            'https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/${Uri.encodeComponent(jsonEncode({'id': a.id, 'url': a.url, 'author': a.author, 'name': a.name, 'preferredApkIndex': a.preferredApkIndex, 'additionalSettings': jsonEncode(a.additionalSettings), 'overrideSource': a.overrideSource}))}\n\n';
+      }
+      SharePlus.instance.share(
+        ShareParams(text: urls, subject: 'ObtainX - ${tr('appsString')}'),
+      );
+    }
+
+    exportSelectedApps() {
+      var encoder = const JsonEncoder.withIndent("    ");
+      var exportJSON = encoder.convert(
+        appsProvider.generateExportJSON(
+          appIds: selectedApps.map((e) => e.id).toList(),
+          overrideExportSettings: 0,
+        ),
+      );
+      String fn =
+          '${tr('obtainiumExportHyphenatedLowercase')}-${DateTime.now().toIso8601String().replaceAll(':', '-')}-count-${selectedApps.length}';
+      XFile f = XFile.fromData(
+        Uint8List.fromList(utf8.encode(exportJSON)),
+        mimeType: 'application/json',
+        name: fn,
+      );
+      SharePlus.instance.share(
+        ShareParams(files: [f], fileNameOverrides: ['$fn.json']),
+      );
+    }
+
     showMoreOptionsDialog() {
       return showDialog(
         context: context,
@@ -4075,17 +4257,7 @@ class AppsPageState extends State<AppsPage> {
                   const Divider(),
                   TextButton(
                     onPressed: () {
-                      String urls = '';
-                      for (var a in selectedApps) {
-                        urls += '${a.url}\n';
-                      }
-                      urls = urls.substring(0, urls.length - 1);
-                      SharePlus.instance.share(
-                        ShareParams(
-                          text: urls,
-                          subject: 'ObtainX - ${tr('appsString')}',
-                        ),
-                      );
+                      shareSelectedAppUrls();
                       Navigator.of(context).pop();
                     },
                     child: Text(
@@ -4097,19 +4269,7 @@ class AppsPageState extends State<AppsPage> {
                   TextButton(
                     onPressed: selectedAppIds.isEmpty
                         ? null
-                        : () {
-                            String urls = '';
-                            for (var a in selectedApps) {
-                              urls +=
-                                  'https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/${Uri.encodeComponent(jsonEncode({'id': a.id, 'url': a.url, 'author': a.author, 'name': a.name, 'preferredApkIndex': a.preferredApkIndex, 'additionalSettings': jsonEncode(a.additionalSettings), 'overrideSource': a.overrideSource}))}\n\n';
-                            }
-                            SharePlus.instance.share(
-                              ShareParams(
-                                text: urls,
-                                subject: 'ObtainX - ${tr('appsString')}',
-                              ),
-                            );
-                          },
+                        : shareSelectedAppConfigLinks,
                     child: Text(
                       tr('shareAppConfigLinks'),
                       textAlign: TextAlign.center,
@@ -4119,28 +4279,7 @@ class AppsPageState extends State<AppsPage> {
                   TextButton(
                     onPressed: selectedAppIds.isEmpty
                         ? null
-                        : () {
-                            var encoder = const JsonEncoder.withIndent("    ");
-                            var exportJSON = encoder.convert(
-                              appsProvider.generateExportJSON(
-                                appIds: selectedApps.map((e) => e.id).toList(),
-                                overrideExportSettings: 0,
-                              ),
-                            );
-                            String fn =
-                                '${tr('obtainiumExportHyphenatedLowercase')}-${DateTime.now().toIso8601String().replaceAll(':', '-')}-count-${selectedApps.length}';
-                            XFile f = XFile.fromData(
-                              Uint8List.fromList(utf8.encode(exportJSON)),
-                              mimeType: 'application/json',
-                              name: fn,
-                            );
-                            SharePlus.instance.share(
-                              ShareParams(
-                                files: [f],
-                                fileNameOverrides: ['$fn.json'],
-                              ),
-                            );
-                          },
+                        : exportSelectedApps,
                     child: Text(
                       '${tr('share')} - ${tr('obtainiumExport')}',
                       textAlign: TextAlign.center,
@@ -4149,18 +4288,7 @@ class AppsPageState extends State<AppsPage> {
                   const Divider(),
                   TextButton(
                     onPressed: () {
-                      appsProvider
-                          .downloadAppAssets(
-                            selectedApps.map((e) => e.id).toList(),
-                            globalNavigatorKey.currentContext ?? context,
-                          )
-                          .catchError(
-                            // ignore: invalid_return_type_for_catch_error
-                            (e) => showError(
-                              e,
-                              globalNavigatorKey.currentContext ?? context,
-                            ),
-                          );
+                      downloadSelectedAppAssets();
                       Navigator.of(context).pop();
                     },
                     child: Text(
@@ -4644,44 +4772,34 @@ class AppsPageState extends State<AppsPage> {
       );
     }
 
-    getDisplayedList() {
+    List<Widget> getDisplayedList() {
       final groupBy = effectiveGroupBy;
       final pinUpdatesEnabled = _effectivePinUpdates(settingsProvider);
 
-      // Builds a SliverList where the optional updates group is prepended
-      // (pinUpdatesEnabled=true) or appended (false) to [mainChildCount] items
-      // built by [mainBuilder].
-      SliverList buildGroupedSliver({
+      // Builds a list of slivers where the optional updates group is prepended
+      // (pinUpdatesEnabled=true) or appended (false) to the list of main groups.
+      List<Widget> buildGroupedSliverList({
         required int mainChildCount,
         required Widget Function(int index) mainBuilder,
       }) {
-        final totalCount =
-            mainChildCount +
-            (showNonInstalledGroupSection ? 1 : 0) +
-            (showUpdatesGroupSection ? 1 : 0);
-        return SliverList(
-          delegate: SliverChildBuilderDelegate((context, index) {
-            int i = index;
-            // Updates group pinned to top.
-            if (showUpdatesGroupSection && pinUpdatesEnabled) {
-              if (i == 0) return getUpdatesCollapsibleTile();
-              i--;
-            }
-            // Main groups.
-            if (i < mainChildCount) return mainBuilder(i);
-            i -= mainChildCount;
-            // Non-installed group.
-            if (showNonInstalledGroupSection) {
-              if (i == 0) return getNonInstalledCollapsibleTile();
-              i--;
-            }
-            // Updates group at bottom (when not pinned).
-            if (showUpdatesGroupSection && !pinUpdatesEnabled) {
-              if (i == 0) return getUpdatesCollapsibleTile();
-            }
-            return null;
-          }, childCount: totalCount),
-        );
+        final List<Widget> list = [];
+        // Updates group pinned to top.
+        if (showUpdatesGroupSection && pinUpdatesEnabled) {
+          list.add(getUpdatesCollapsibleTile());
+        }
+        // Main groups.
+        for (int i = 0; i < mainChildCount; i++) {
+          list.add(mainBuilder(i));
+        }
+        // Non-installed group.
+        if (showNonInstalledGroupSection) {
+          list.add(getNonInstalledCollapsibleTile());
+        }
+        // Updates group at bottom (when not pinned).
+        if (showUpdatesGroupSection && !pinUpdatesEnabled) {
+          list.add(getUpdatesCollapsibleTile());
+        }
+        return list;
       }
 
       final useCategoryGroups =
@@ -4692,7 +4810,7 @@ class AppsPageState extends State<AppsPage> {
                     (listedCategories.length == 1 &&
                         listedCategories[0] == null)));
       if (useCategoryGroups) {
-        return buildGroupedSliver(
+        return buildGroupedSliverList(
           mainChildCount: listedCategories.length,
           mainBuilder: (i) => getCategoryCollapsibleTile(i),
         );
@@ -4702,7 +4820,7 @@ class AppsPageState extends State<AppsPage> {
           groupBy == AppsListGroupBy.source &&
           (listedSources.isNotEmpty || showNonInstalledGroupSection);
       if (useSourceGroups) {
-        return buildGroupedSliver(
+        return buildGroupedSliverList(
           mainChildCount: listedSources.length,
           mainBuilder: (i) => getSourceCollapsibleTile(i),
         );
@@ -4712,7 +4830,7 @@ class AppsPageState extends State<AppsPage> {
           groupBy == AppsListGroupBy.appType &&
           (listedAppTypes.isNotEmpty || showNonInstalledGroupSection);
       if (useAppTypeGroups) {
-        return buildGroupedSliver(
+        return buildGroupedSliverList(
           mainChildCount: listedAppTypes.length,
           mainBuilder: (i) => getAppTypeCollapsibleTile(listedAppTypes[i]),
         );
@@ -4725,38 +4843,36 @@ class AppsPageState extends State<AppsPage> {
           for (int i = 0; i < listedApps.length; i++)
             if (!isInUpdatesGroup(listedApps[i])) i,
         ];
-        final totalCount = 1 + nonUpdatesIndices.length;
-        return SliverList(
+        final flatSliverList = SliverList(
           delegate: SliverChildBuilderDelegate((context, index) {
-            if (pinUpdatesEnabled) {
-              if (index == 0) return getUpdatesCollapsibleTile();
-              final int runIndex = index - 1;
-              return flatListAppRow(
-                nonUpdatesIndices[runIndex],
-                runIndex,
-                nonUpdatesIndices.length,
-                spacerBeforeFirstRow: runIndex == 0,
-              );
-            } else {
-              if (index < nonUpdatesIndices.length) {
-                return flatListAppRow(
-                  nonUpdatesIndices[index],
-                  index,
-                  nonUpdatesIndices.length,
-                  spacerAfterLastRow: index == nonUpdatesIndices.length - 1,
-                );
-              }
-              return getUpdatesCollapsibleTile();
-            }
-          }, childCount: totalCount),
+            return flatListAppRow(
+              nonUpdatesIndices[index],
+              index,
+              nonUpdatesIndices.length,
+              spacerBeforeFirstRow: pinUpdatesEnabled && index == 0,
+              spacerAfterLastRow:
+                  !pinUpdatesEnabled && index == nonUpdatesIndices.length - 1,
+            );
+          }, childCount: nonUpdatesIndices.length),
         );
+
+        if (pinUpdatesEnabled) {
+          return [getUpdatesCollapsibleTile(), flatSliverList];
+        } else {
+          return [flatSliverList, getUpdatesCollapsibleTile()];
+        }
       }
 
-      return SliverList(
-        delegate: SliverChildBuilderDelegate((BuildContext context, int index) {
-          return flatListAppRow(index, index, listedApps.length);
-        }, childCount: listedApps.length),
-      );
+      return [
+        SliverList(
+          delegate: SliverChildBuilderDelegate((
+            BuildContext context,
+            int index,
+          ) {
+            return flatListAppRow(index, index, listedApps.length);
+          }, childCount: listedApps.length),
+        ),
+      ];
     }
 
     // Back intercept priority:
@@ -4792,288 +4908,806 @@ class AppsPageState extends State<AppsPage> {
           });
         }
       },
-      child: Scaffold(
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        body: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              // [ExpressiveRefreshIndicator] is a drop-in replacement for the
-              // stock [RefreshIndicator] - same API surface (child, onRefresh,
-              // displacement, color, etc.) - but renders the M3 Expressive
-              // morphing-polygon loading shape instead of the legacy circular
-              // spinner. From package: expressive_refresh.
-              child: ExpressiveRefreshIndicator(
-                key: _refreshIndicatorKey,
-                onRefresh: refresh,
-                child: Scrollbar(
-                  interactive: true,
-                  controller: scrollController,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      if (settingsProvider.useGradientBackground)
-                        Positioned.fill(
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                stops: const [0, 0.38, 0.72, 1],
-                                colors: [
-                                  Theme.of(
-                                    context,
-                                  ).colorScheme.schemePageGradientTopColor,
-                                  Theme.of(
-                                    context,
-                                  ).colorScheme.schemePageGradientMidColor,
-                                  Theme.of(context).colorScheme.surface,
-                                  Theme.of(context).colorScheme.surface,
-                                ],
+      child: () {
+        final Widget listScaffold = Scaffold(
+          backgroundColor: Theme.of(context).colorScheme.surface,
+          body: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                // [ExpressiveRefreshIndicator] is a drop-in replacement for the
+                // stock [RefreshIndicator] - same API surface (child, onRefresh,
+                // displacement, color, etc.) - but renders the M3 Expressive
+                // morphing-polygon loading shape instead of the legacy circular
+                // spinner. From package: expressive_refresh.
+                child: ExpressiveRefreshIndicator(
+                  key: _refreshIndicatorKey,
+                  onRefresh: refresh,
+                  child: _ConditionalScrollbar(
+                    condition: !isLargeScreen,
+                    controller: scrollController,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        if (settingsProvider.useGradientBackground)
+                          Positioned.fill(
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: Theme.of(
+                                  context,
+                                ).colorScheme.schemePageBackgroundGradient,
                               ),
                             ),
                           ),
-                        ),
-                      CustomScrollView(
-                        scrollCacheExtent: const ScrollCacheExtent.pixels(1800),
-                        key: PageStorageKey<String>(
-                          'apps-scroll-${widget.folderId ?? (widget.onDemandOnlyList ? 'on-demand' : 'main')}',
-                        ),
-                        physics: const AlwaysScrollableScrollPhysics(
-                          parent: ClampingScrollPhysics(),
-                        ),
-                        controller: scrollController,
-                        slivers: <Widget>[
-                          CustomAppBar(
-                            leading:
-                                (widget.onDemandOnlyList ||
-                                    widget.folderId != null)
-                                ? IconButton(
-                                    icon: const Icon(Icons.arrow_back),
-                                    onPressed: () =>
-                                        Navigator.of(context).maybePop(),
-                                    tooltip: MaterialLocalizations.of(
-                                      context,
-                                    ).backButtonTooltip,
-                                  )
-                                : null,
-                            title: widget.onDemandOnlyList
-                                ? tr('onDemandOnlyAppsTitle')
-                                : currentFolderName ?? tr('appsString'),
-                            matchGradientBackground:
-                                settingsProvider.useGradientBackground,
-                            titleStyle: _searchExpanded
-                                ? Theme.of(context).textTheme.titleSmall
-                                : null,
-                            actions: [
-                              if (!_searchExpanded)
-                                IconButton(
-                                  icon: const Icon(Icons.search),
-                                  onPressed: () {
-                                    setState(() => _searchExpanded = true);
-                                    _searchFocusNode.requestFocus();
-                                  },
-                                )
-                              else
-                                IconButton(
-                                  icon: const Icon(Icons.close),
-                                  onPressed: () => setState(() {
-                                    _searchExpanded = false;
-                                    _searchController.clear();
-                                    _searchFocusNode.unfocus();
-                                  }),
-                                ),
-                              if (effectiveGroupBy != AppsListGroupBy.none ||
-                                  showUpdatesGroupSection) ...[
-                                IconButton(
-                                  icon: Icon(
-                                    allGroupsExpanded
-                                        ? Icons.unfold_less_rounded
-                                        : Icons.unfold_more_rounded,
-                                  ),
-                                  tooltip: allGroupsExpanded
-                                      ? tr('collapseAll')
-                                      : tr('expandAll'),
-                                  onPressed: () {
-                                    setState(() {
-                                      if (allGroupsExpanded) {
-                                        _collapsedGroups.addAll(
-                                          activeGroupKeys,
-                                        );
-                                        for (final key in activeGroupKeys) {
-                                          _groupControllers[key]?.collapse();
-                                        }
-                                      } else {
-                                        _collapsedGroups.clear();
-                                        for (final key in activeGroupKeys) {
-                                          _groupControllers[key]?.expand();
-                                        }
-                                      }
-                                    });
-                                  },
-                                ),
-                              ],
-                            ],
-                            // Always use the compact layout so the action icon
-                            // and "Apps" title are always on the same toolbar row.
-                            searchWidget: _searchExpanded
-                                ? _buildSearchBar(
-                                    colorScheme: Theme.of(context).colorScheme,
-                                    showFilterSheet: showFilterSheet,
-                                    neutralFilter: neutralFilter,
-                                    settingsProvider: settingsProvider,
-                                    focusNode: _searchFocusNode,
-                                  )
-                                : const SizedBox.shrink(),
-                            bottom: filterChipsBar,
+                        CustomScrollView(
+                          scrollCacheExtent: const ScrollCacheExtent.pixels(
+                            1800,
                           ),
-                          ...getLoadingWidgets(),
-                          getDisplayedList(),
-                          // Extra bottom space for folder / on-demand pages so the
-                          // last item isn't clipped by the phone's rounded corners.
-                          if (widget.onDemandOnlyList ||
-                              widget.folderId != null)
-                            const SliverToBoxAdapter(
-                              child: SizedBox(height: 80),
-                            ),
-                          if (!widget.onDemandOnlyList &&
-                              widget.folderId == null)
-                            SliverToBoxAdapter(
-                              child: Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  16,
-                                  20,
-                                  16,
-                                  0,
-                                ),
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    // Manage Folders button
-                                    TextButton.icon(
+                          key: PageStorageKey<String>(
+                            'apps-scroll-${widget.folderId ?? (widget.onDemandOnlyList ? 'on-demand' : 'main')}',
+                          ),
+                          physics: const AlwaysScrollableScrollPhysics(
+                            parent: ClampingScrollPhysics(),
+                          ),
+                          controller: scrollController,
+                          slivers: <Widget>[
+                            CustomAppBar(
+                              leading:
+                                  (widget.onDemandOnlyList ||
+                                      widget.folderId != null)
+                                  ? IconButton(
+                                      icon: const Icon(Icons.arrow_back),
                                       onPressed: () =>
-                                          _showFolderManageDialog(context),
-                                      icon: const Icon(
-                                        Icons.folder_copy_outlined,
-                                        size: 18,
-                                      ),
-                                      label: Text(tr('manageFolders')),
+                                          Navigator.of(context).maybePop(),
+                                      tooltip: MaterialLocalizations.of(
+                                        context,
+                                      ).backButtonTooltip,
+                                    )
+                                  : null,
+                              title: _searchExpanded
+                                  ? ""
+                                  : (widget.onDemandOnlyList
+                                        ? tr('onDemandOnlyAppsTitle')
+                                        : currentFolderName ??
+                                              tr('appsString')),
+                              matchGradientBackground:
+                                  settingsProvider.useGradientBackground,
+                              progressiveBlurOverlayColor: isLargeScreen
+                                  ? Theme.of(context).colorScheme.surface
+                                        .withValues(alpha: 0.72)
+                                  : null,
+                              actions: [
+                                if (!_searchExpanded)
+                                  IconButton(
+                                    icon: const Icon(Icons.search),
+                                    onPressed: () {
+                                      setState(() => _searchExpanded = true);
+                                      _searchFocusNode.requestFocus();
+                                    },
+                                  ),
+                                if (effectiveGroupBy != AppsListGroupBy.none ||
+                                    showUpdatesGroupSection) ...[
+                                  IconButton(
+                                    icon: Icon(
+                                      allGroupsExpanded
+                                          ? Icons.unfold_less_rounded
+                                          : Icons.unfold_more_rounded,
                                     ),
-                                    // User-defined folder buttons
-                                    if (appFolders.isNotEmpty) ...[
-                                      const SizedBox(height: 8),
-                                      ...appFolders.map(
-                                        (folder) => Padding(
-                                          padding: const EdgeInsets.only(
-                                            bottom: 8,
-                                          ),
-                                          child: FilledButton.icon(
-                                            onPressed: () {
-                                              Navigator.push(
-                                                context,
-                                                slideUpPageRoute(
-                                                  (_) => AppsPage(
-                                                    folderId: folder.id,
+                                    tooltip: allGroupsExpanded
+                                        ? tr('collapseAll')
+                                        : tr('expandAll'),
+                                    onPressed: () {
+                                      setState(() {
+                                        if (allGroupsExpanded) {
+                                          _collapsedGroups.addAll(
+                                            activeGroupKeys,
+                                          );
+                                        } else {
+                                          _collapsedGroups.removeAll(
+                                            activeGroupKeys,
+                                          );
+                                        }
+                                      });
+                                      // Persist the bulk toggle so it survives a
+                                      // restart, matching the per-group header tap.
+                                      _saveCollapsedGroups(
+                                        activeGroupKeys,
+                                        add: allGroupsExpanded,
+                                      );
+                                    },
+                                  ),
+                                ],
+                              ],
+                              // Always use the compact layout so the action icon
+                              // and "Apps" title are always on the same toolbar row.
+                              searchWidget: _searchExpanded
+                                  ? _buildSearchBar(
+                                      colorScheme: Theme.of(
+                                        context,
+                                      ).colorScheme,
+                                      showFilterSheet: showFilterSheet,
+                                      neutralFilter: neutralFilter,
+                                      settingsProvider: settingsProvider,
+                                      focusNode: _searchFocusNode,
+                                    )
+                                  : const SizedBox.shrink(),
+                              bottom: filterChipsBar,
+                            ),
+                            ...getLoadingWidgets(),
+                            ...getDisplayedList(),
+                            // Extra bottom space for folder / on-demand pages so the
+                            // last item isn't clipped by the phone's rounded corners.
+                            if (widget.onDemandOnlyList ||
+                                widget.folderId != null)
+                              const SliverToBoxAdapter(
+                                child: SizedBox(height: 80),
+                              ),
+                            if (!widget.onDemandOnlyList &&
+                                widget.folderId == null)
+                              SliverToBoxAdapter(
+                                child: Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    16,
+                                    20,
+                                    16,
+                                    0,
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      // Manage Folders button
+                                      TextButton.icon(
+                                        onPressed: () =>
+                                            _showFolderManageDialog(context),
+                                        icon: const Icon(
+                                          Icons.folder_copy_outlined,
+                                          size: 18,
+                                        ),
+                                        label: Text(tr('manageFolders')),
+                                      ),
+                                      // User-defined folder buttons
+                                      if (appFolders.isNotEmpty) ...[
+                                        const SizedBox(height: 8),
+                                        ...appFolders.map(
+                                          (folder) => Padding(
+                                            padding: const EdgeInsets.only(
+                                              bottom: 8,
+                                            ),
+                                            child: FilledButton.icon(
+                                              onPressed: () {
+                                                Navigator.push(
+                                                  context,
+                                                  slideUpPageRoute(
+                                                    (_) => AppsPage(
+                                                      folderId: folder.id,
+                                                    ),
                                                   ),
-                                                ),
-                                              );
-                                            },
-                                            icon: () {
-                                              final int upd =
-                                                  folderUpdateCounts[folder
-                                                      .id] ??
-                                                  0;
-                                              if (upd > 0) {
-                                                return Row(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: [
-                                                    Badge(
-                                                      label: Text('$upd'),
-                                                      child: const SizedBox(
-                                                        width: 4,
-                                                        height: 16,
-                                                      ),
-                                                    ),
-                                                    const SizedBox(width: 6),
-                                                    const Icon(
-                                                      Icons.folder_outlined,
-                                                    ),
-                                                  ],
                                                 );
-                                              }
-                                              return const Icon(
-                                                Icons.folder_outlined,
-                                              );
-                                            }(),
-                                            label: Text(
-                                              '${folder.name} '
-                                              '(${folderAppCounts[folder.id] ?? 0} ${tr('appsString').toLowerCase()})',
+                                              },
+                                              icon: () {
+                                                final int upd =
+                                                    folderUpdateCounts[folder
+                                                        .id] ??
+                                                    0;
+                                                if (upd > 0) {
+                                                  return Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      Badge(
+                                                        label: Text('$upd'),
+                                                        child: const SizedBox(
+                                                          width: 4,
+                                                          height: 16,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 6),
+                                                      const Icon(
+                                                        Icons.folder_outlined,
+                                                      ),
+                                                    ],
+                                                  );
+                                                }
+                                                return const Icon(
+                                                  Icons.folder_outlined,
+                                                );
+                                              }(),
+                                              label: Text(
+                                                '${folder.name} '
+                                                '(${folderAppCounts[folder.id] ?? 0} ${tr('appsString').toLowerCase()})',
+                                              ),
                                             ),
                                           ),
                                         ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                    ],
-                                    // On-Demand Only button (always last)
-                                    FilledButton.icon(
-                                      onPressed: () {
-                                        Navigator.push(
-                                          context,
-                                          slideUpPageRoute(
-                                            (_) => const AppsPage(
-                                              onDemandOnlyList: true,
+                                        const SizedBox(height: 8),
+                                      ],
+                                      // On-Demand Only button (always last)
+                                      FilledButton.icon(
+                                        onPressed: () {
+                                          Navigator.push(
+                                            context,
+                                            slideUpPageRoute(
+                                              (_) => const AppsPage(
+                                                onDemandOnlyList: true,
+                                              ),
                                             ),
-                                          ),
-                                        );
-                                      },
-                                      icon: const Icon(
-                                        Icons.folder_special_outlined,
+                                          );
+                                        },
+                                        icon: const Icon(
+                                          Icons.folder_special_outlined,
+                                        ),
+                                        label: Text(
+                                          '${tr('onDemandOnly')} '
+                                          '($onDemandOnlyAppCount ${tr('appsString').toLowerCase()})',
+                                        ),
                                       ),
-                                      label: Text(
-                                        '${tr('onDemandOnly')} '
-                                        '($onDemandOnlyAppCount ${tr('appsString').toLowerCase()})',
-                                      ),
-                                    ),
-                                    const SizedBox(height: 20),
-                                  ],
+                                      const SizedBox(height: 20),
+                                    ],
+                                  ),
                                 ),
                               ),
-                            ),
-                          if (settingsProvider.progressiveBlurEnabled)
-                            SliverToBoxAdapter(
-                              child: SizedBox(
-                                height: MediaQuery.paddingOf(context).bottom,
+                            if (settingsProvider.progressiveBlurEnabled)
+                              SliverToBoxAdapter(
+                                child: SizedBox(
+                                  height: MediaQuery.paddingOf(context).bottom,
+                                ),
                               ),
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            if (appsProvider.apps.isNotEmpty)
-              _ScrollLinkedAppFooter(
-                scrollController: scrollController,
-                selectionActive: selectedAppIds.isNotEmpty,
-                footer: Material(
-                  elevation: 0,
-                  surfaceTintColor: Colors.transparent,
-                  color: Theme.of(context).colorScheme.surface,
-                  child: SafeArea(
-                    top: false,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: getFilterButtonsRow(),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ),
-          ],
-        ),
-      ),
+              if (appsProvider.apps.isNotEmpty &&
+                  !(isLargeScreen && selectedAppIds.isNotEmpty))
+                _ScrollLinkedAppFooter(
+                  scrollController: scrollController,
+                  selectionActive: selectedAppIds.isNotEmpty,
+                  footer: Material(
+                    elevation: 0,
+                    surfaceTintColor: Colors.transparent,
+                    color: Theme.of(context).colorScheme.surface,
+                    child: SafeArea(
+                      top: false,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: getFilterButtonsRow(),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+
+        if (isLargeScreen) {
+          // Full-bleed page background behind both panes - prevents the master
+          // pane's app-bar progressive-blur BackdropFilter from sampling
+          // transparent-black at the seam (the detail pane paints after the
+          // master in this Row, so that strip is empty when the blur
+          // rasterizes), which produced the two-panel "dark smudge" at the
+          // right end of the master title bar. See settings.dart and
+          // custom_app_bar.dart's _buildBlur.
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              Positioned.fill(
+                child: settingsProvider.useGradientBackground
+                    ? DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: Theme.of(
+                            context,
+                          ).colorScheme.schemePageBackgroundGradient,
+                        ),
+                      )
+                    : ColoredBox(color: Theme.of(context).colorScheme.surface),
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    flex: 3,
+                    child: Theme(
+                      data: Theme.of(context).copyWith(
+                        scrollbarTheme: const ScrollbarThemeData(
+                          thumbColor: WidgetStatePropertyAll(
+                            Colors.transparent,
+                          ),
+                          trackColor: WidgetStatePropertyAll(
+                            Colors.transparent,
+                          ),
+                          trackBorderColor: WidgetStatePropertyAll(
+                            Colors.transparent,
+                          ),
+                          minThumbLength: 0,
+                        ),
+                      ),
+                      child: listScaffold,
+                    ),
+                  ),
+                  VerticalDivider(
+                    width: 1,
+                    thickness: 1,
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.outlineVariant.withAlpha(50),
+                  ),
+                  Expanded(
+                    flex: 4,
+                    child: selectedAppIds.isNotEmpty
+                        ? Builder(
+                            builder: (BuildContext context) {
+                              final ColorScheme scheme = Theme.of(
+                                context,
+                              ).colorScheme;
+                              final buttonStyle = ElevatedButton.styleFrom(
+                                minimumSize: const Size.fromHeight(56),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 24,
+                                  vertical: 16,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                alignment: Alignment.centerLeft,
+                              );
+                              final destructiveButtonStyle =
+                                  ElevatedButton.styleFrom(
+                                    minimumSize: const Size.fromHeight(56),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 24,
+                                      vertical: 16,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    backgroundColor: scheme.errorContainer,
+                                    foregroundColor: scheme.onErrorContainer,
+                                    alignment: Alignment.centerLeft,
+                                  );
+                              return Scaffold(
+                                backgroundColor:
+                                    settingsProvider.useGradientBackground
+                                    ? Colors.transparent
+                                    : scheme.surface,
+                                body: Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    if (settingsProvider.useGradientBackground)
+                                      Positioned.fill(
+                                        child: DecoratedBox(
+                                          decoration: BoxDecoration(
+                                            gradient: scheme
+                                                .schemePageBackgroundGradient,
+                                          ),
+                                        ),
+                                      ),
+                                    CustomScrollView(
+                                      slivers: [
+                                        CustomAppBar(
+                                          title: tr(
+                                            'selectedX',
+                                            args: [
+                                              selectedAppIds.length.toString(),
+                                            ],
+                                          ),
+                                          matchGradientBackground:
+                                              settingsProvider
+                                                  .useGradientBackground,
+                                        ),
+                                        SliverSafeArea(
+                                          top: false,
+                                          bottom: true,
+                                          sliver: SliverPadding(
+                                            padding: const EdgeInsets.all(24),
+                                            sliver: SliverToBoxAdapter(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.stretch,
+                                                children: [
+                                                  Row(
+                                                    children: [
+                                                      Expanded(
+                                                        child: OutlinedButton.icon(
+                                                          style: OutlinedButton.styleFrom(
+                                                            minimumSize:
+                                                                const Size.fromHeight(
+                                                                  48,
+                                                                ),
+                                                            shape: RoundedRectangleBorder(
+                                                              borderRadius:
+                                                                  BorderRadius.circular(
+                                                                    12,
+                                                                  ),
+                                                            ),
+                                                            side: BorderSide(
+                                                              color: scheme
+                                                                  .primary
+                                                                  .withAlpha(
+                                                                    120,
+                                                                  ),
+                                                              width: 1,
+                                                              strokeAlign:
+                                                                  BorderSide
+                                                                      .strokeAlignInside,
+                                                            ),
+                                                          ),
+                                                          onPressed:
+                                                              listedApps.isEmpty
+                                                              ? null
+                                                              : () {
+                                                                  setState(() {
+                                                                    for (final appInMem
+                                                                        in listedApps) {
+                                                                      selectedAppIds.add(
+                                                                        appInMem
+                                                                            .app
+                                                                            .id,
+                                                                      );
+                                                                    }
+                                                                  });
+                                                                },
+                                                          icon: const Icon(
+                                                            Icons
+                                                                .select_all_outlined,
+                                                          ),
+                                                          label: Text(
+                                                            tr('selectAll'),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 12),
+                                                      Expanded(
+                                                        child: OutlinedButton.icon(
+                                                          style: OutlinedButton.styleFrom(
+                                                            minimumSize:
+                                                                const Size.fromHeight(
+                                                                  48,
+                                                                ),
+                                                            shape: RoundedRectangleBorder(
+                                                              borderRadius:
+                                                                  BorderRadius.circular(
+                                                                    12,
+                                                                  ),
+                                                            ),
+                                                            side: BorderSide(
+                                                              color: scheme
+                                                                  .primary
+                                                                  .withAlpha(
+                                                                    120,
+                                                                  ),
+                                                              width: 1,
+                                                              strokeAlign:
+                                                                  BorderSide
+                                                                      .strokeAlignInside,
+                                                            ),
+                                                          ),
+                                                          onPressed: () {
+                                                            setState(() {
+                                                              selectedAppIds
+                                                                  .clear();
+                                                            });
+                                                          },
+                                                          icon: const Icon(
+                                                            Icons.deselect,
+                                                          ),
+                                                          label: Text(
+                                                            tr('deselectAll'),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  const SizedBox(height: 16),
+                                                  FilledButton.icon(
+                                                    style: FilledButton.styleFrom(
+                                                      minimumSize:
+                                                          const Size.fromHeight(
+                                                            56,
+                                                          ),
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 24,
+                                                            vertical: 16,
+                                                          ),
+                                                      shape: RoundedRectangleBorder(
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              16,
+                                                            ),
+                                                      ),
+                                                      alignment:
+                                                          Alignment.centerLeft,
+                                                    ),
+                                                    onPressed:
+                                                        getMassObtainFunction(),
+                                                    icon: const Icon(
+                                                      Icons
+                                                          .file_download_outlined,
+                                                    ),
+                                                    label: Text(
+                                                      tr(
+                                                        'installUpdateSelectedApps',
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 12),
+                                                  ElevatedButton.icon(
+                                                    style: buttonStyle,
+                                                    onPressed:
+                                                        appsProvider
+                                                            .areDownloadsRunning()
+                                                        ? null
+                                                        : showMassMarkDialog,
+                                                    icon: const Icon(
+                                                      Icons
+                                                          .check_circle_outline_rounded,
+                                                    ),
+                                                    label: Text(
+                                                      tr(
+                                                        'markSelectedAppsUpdated',
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 12),
+                                                  ElevatedButton.icon(
+                                                    style: buttonStyle,
+                                                    onPressed:
+                                                        downloadSelectedAppAssets,
+                                                    icon: const Icon(
+                                                      Icons
+                                                          .download_for_offline_outlined,
+                                                    ),
+                                                    label: Text(
+                                                      tr(
+                                                        'downloadX',
+                                                        args: [
+                                                          lowerCaseIfEnglish(
+                                                            tr('releaseAsset'),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 12),
+                                                  ElevatedButton.icon(
+                                                    style: buttonStyle,
+                                                    onPressed:
+                                                        launchCategorizeDialog(),
+                                                    icon: const Icon(
+                                                      Icons.category_outlined,
+                                                    ),
+                                                    label: Text(
+                                                      tr('categorize'),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 12),
+                                                  ElevatedButton.icon(
+                                                    style: buttonStyle,
+                                                    onPressed: pinSelectedApps,
+                                                    icon: const Icon(
+                                                      Icons.push_pin_outlined,
+                                                    ),
+                                                    label: Text(
+                                                      selectedApps
+                                                              .where(
+                                                                (element) =>
+                                                                    element
+                                                                        .pinned,
+                                                              )
+                                                              .isEmpty
+                                                          ? tr('pinToTop')
+                                                          : tr('unpinFromTop'),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 12),
+                                                  ElevatedButton.icon(
+                                                    style: buttonStyle,
+                                                    onPressed: () =>
+                                                        _showFolderAssignDialog(
+                                                          context,
+                                                          selectedApps,
+                                                        ),
+                                                    icon: const Icon(
+                                                      Icons
+                                                          .folder_copy_outlined,
+                                                    ),
+                                                    label: Text(
+                                                      tr('addToFolder'),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 12),
+                                                  ElevatedButton.icon(
+                                                    style: buttonStyle,
+                                                    onPressed:
+                                                        shareSelectedAppUrls,
+                                                    icon: const Icon(
+                                                      Icons.share_outlined,
+                                                    ),
+                                                    label: Text(
+                                                      tr(
+                                                        'shareSelectedAppURLs',
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 12),
+                                                  ElevatedButton.icon(
+                                                    style: buttonStyle,
+                                                    onPressed:
+                                                        shareSelectedAppConfigLinks,
+                                                    icon: const Icon(
+                                                      Icons
+                                                          .settings_suggest_outlined,
+                                                    ),
+                                                    label: Text(
+                                                      tr('shareAppConfigLinks'),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 12),
+                                                  ElevatedButton.icon(
+                                                    style: buttonStyle,
+                                                    onPressed:
+                                                        exportSelectedApps,
+                                                    icon: const Icon(
+                                                      Icons
+                                                          .import_export_outlined,
+                                                    ),
+                                                    label: Text(
+                                                      '${tr('share')} - ${tr('obtainiumExport')}',
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 24),
+                                                  ElevatedButton.icon(
+                                                    style:
+                                                        destructiveButtonStyle,
+                                                    onPressed: () async {
+                                                      final appsProviderRef =
+                                                          appsProvider;
+                                                      final messenger =
+                                                          scaffoldMessengerKey
+                                                              .currentState;
+                                                      final RemoveAppsWithModalResult
+                                                      removeResult =
+                                                          await appsProviderRef
+                                                              .removeAppsWithModal(
+                                                                context,
+                                                                selectedApps
+                                                                    .toList(),
+                                                              );
+                                                      if (removeResult
+                                                          .shouldShowSnackBar) {
+                                                        final Set<String>
+                                                        undoAppIds = removeResult
+                                                            .deferredUndoAppIds;
+                                                        final int removedCount =
+                                                            removeResult
+                                                                .deferredUndoAppIds
+                                                                .isNotEmpty
+                                                            ? removeResult
+                                                                  .deferredUndoAppIds
+                                                                  .length
+                                                            : selectedApps
+                                                                  .length;
+                                                        messenger
+                                                          ?..clearSnackBars()
+                                                          ..showSnackBar(
+                                                            SnackBar(
+                                                              content: Text(
+                                                                tr(
+                                                                  'xAppsRemoved',
+                                                                  args: [
+                                                                    '$removedCount',
+                                                                  ],
+                                                                ),
+                                                              ),
+                                                              persist: false,
+                                                              duration:
+                                                                  const Duration(
+                                                                    seconds: 5,
+                                                                  ),
+                                                              behavior:
+                                                                  SnackBarBehavior
+                                                                      .floating,
+                                                              action:
+                                                                  undoAppIds
+                                                                      .isNotEmpty
+                                                                  ? SnackBarAction(
+                                                                      label: tr(
+                                                                        'undo',
+                                                                      ),
+                                                                      onPressed: () =>
+                                                                          appsProviderRef.undoDeferredObtainiumRemovals(
+                                                                            undoAppIds,
+                                                                          ),
+                                                                    )
+                                                                  : null,
+                                                            ),
+                                                          );
+                                                      }
+                                                    },
+                                                    icon: const Icon(
+                                                      Icons
+                                                          .delete_outline_outlined,
+                                                    ),
+                                                    label: Text(
+                                                      tr('removeSelectedApps'),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          )
+                        : (effectiveSelectedAppId == null
+                              ? Scaffold(
+                                  backgroundColor:
+                                      settingsProvider.useGradientBackground
+                                      ? Colors.transparent
+                                      : Theme.of(context).colorScheme.surface,
+                                  body: Stack(
+                                    fit: StackFit.expand,
+                                    children: [
+                                      if (settingsProvider
+                                          .useGradientBackground)
+                                        Positioned.fill(
+                                          child: DecoratedBox(
+                                            decoration: BoxDecoration(
+                                              gradient: Theme.of(context)
+                                                  .colorScheme
+                                                  .schemePageBackgroundGradient,
+                                            ),
+                                          ),
+                                        ),
+                                      Center(
+                                        child: SingleChildScrollView(
+                                          padding: const EdgeInsets.all(24),
+                                          child: m3eExpressiveSettingsCard(
+                                            context: context,
+                                            colorScheme: Theme.of(
+                                              context,
+                                            ).colorScheme,
+                                            items: [
+                                              AboutSectionContent(
+                                                colorScheme: Theme.of(
+                                                  context,
+                                                ).colorScheme,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : Navigator(
+                                  key: _getDetailsNavKey(
+                                    effectiveSelectedAppId,
+                                  ),
+                                  onGenerateRoute: (RouteSettings settings) {
+                                    return MaterialPageRoute(
+                                      builder: (context) => AppPage(
+                                        appId: effectiveSelectedAppId!,
+                                        isEmbedded: true,
+                                      ),
+                                    );
+                                  },
+                                )),
+                  ),
+                ],
+              ),
+            ],
+          );
+        }
+        return listScaffold;
+      }(),
     );
   }
 
@@ -5087,13 +5721,22 @@ class AppsPageState extends State<AppsPage> {
       return;
     }
 
-    Navigator.push(
-      context,
-      heroFriendlyAppPageRoute(
-        (_) =>
-            AppPage(appId: app.app.id, appsListHeroFolderId: widget.folderId),
-      ),
-    );
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final bool isLargeScreen = screenWidth >= kLargeScreenWidthBreakpoint;
+
+    if (isLargeScreen) {
+      setState(() {
+        selectedAppId = app.app.id;
+      });
+    } else {
+      Navigator.push(
+        context,
+        heroFriendlyAppPageRoute(
+          (_) =>
+              AppPage(appId: app.app.id, appsListHeroFolderId: widget.folderId),
+        ),
+      );
+    }
   }
 
   // ── Folder helpers ──────────────────────────────────────────────────────────
@@ -5957,4 +6600,40 @@ class AppsFilter {
       ) &&
       categoryMatchMode == other.categoryMatchMode &&
       sourceFilter.trim() == other.sourceFilter.trim();
+}
+
+class _NoScrollbarBehavior extends MaterialScrollBehavior {
+  const _NoScrollbarBehavior();
+
+  @override
+  Widget buildScrollbar(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
+    return child;
+  }
+}
+
+class _ConditionalScrollbar extends StatelessWidget {
+  const _ConditionalScrollbar({
+    required this.condition,
+    required this.controller,
+    required this.child,
+  });
+
+  final bool condition;
+  final ScrollController controller;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!condition) {
+      return ScrollConfiguration(
+        behavior: const _NoScrollbarBehavior(),
+        child: child,
+      );
+    }
+    return Scrollbar(interactive: true, controller: controller, child: child);
+  }
 }

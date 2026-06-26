@@ -5,6 +5,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:obtainium/components/generated_form_modal.dart';
+import 'package:obtainium/layout_breakpoints.dart';
 import 'package:obtainium/custom_errors.dart';
 import 'package:obtainium/pages/add_app.dart';
 import 'package:obtainium/pages/apps.dart';
@@ -56,7 +57,7 @@ class _HomePageState extends State<HomePage> {
     ),
     NavigationPageItem(
       tr('importExport'),
-      Icons.import_export,
+      Icons.backup_outlined,
       const ImportExportPage(),
     ),
     NavigationPageItem(tr('settings'), Icons.settings, const SettingsPage()),
@@ -373,43 +374,96 @@ class _HomePageState extends State<HomePage> {
         builder: (BuildContext context) {
           final ColorScheme scheme = Theme.of(context).colorScheme;
           final bool blurBottomNav = settingsProvider.progressiveBlurEnabled;
-          final List<NavigationDestination> homeNavDestinations = pages
-              .asMap()
-              .entries
-              .map(
-                (MapEntry<int, NavigationPageItem> entry) =>
-                    NavigationDestination(
-                      icon: entry.key == 0 && updateCount > 0
-                          ? Badge(
-                              label: Text(updateCount.toString()),
-                              child: Icon(entry.value.icon),
-                            )
-                          : Icon(entry.value.icon),
-                      label: entry.value.title,
-                    ),
-              )
-              .toList();
+          final double screenWidth = MediaQuery.of(context).size.width;
+          final bool isLargeScreen = screenWidth >= kLargeScreenWidthBreakpoint;
+
+          // Shared icon builder (adds the update-count badge to the first tab),
+          // and build only the destination list the current layout actually
+          // uses instead of both every frame.
+          Widget navIcon(MapEntry<int, NavigationPageItem> entry) =>
+              entry.key == 0 && updateCount > 0
+              ? Badge(
+                  label: Text(updateCount.toString()),
+                  child: Icon(entry.value.icon),
+                )
+              : Icon(entry.value.icon);
+
+          final List<NavigationDestination> homeNavDestinations = isLargeScreen
+              ? const <NavigationDestination>[]
+              : pages
+                    .asMap()
+                    .entries
+                    .map(
+                      (entry) => NavigationDestination(
+                        icon: navIcon(entry),
+                        label: entry.value.title,
+                      ),
+                    )
+                    .toList();
+
+          // NavigationRailDestination.selectedIcon defaults to [icon] when
+          // omitted, so the previous explicit duplicate isn't needed.
+          final List<NavigationRailDestination> homeNavRailDestinations =
+              isLargeScreen
+              ? pages
+                    .asMap()
+                    .entries
+                    .map(
+                      (entry) => NavigationRailDestination(
+                        icon: navIcon(entry),
+                        label: Text(entry.value.title),
+                      ),
+                    )
+                    .toList()
+              : const <NavigationRailDestination>[];
+
           final int homeNavSelectedIndex = selectedIndexHistory.isEmpty
               ? 0
               : selectedIndexHistory.last;
 
           return Scaffold(
             backgroundColor: scheme.surface,
-            extendBody: blurBottomNav,
-            body: Stack(
-              fit: StackFit.expand,
-              children: [
-                // IndexedStack keeps all four pages mounted so tab switches
-                // are a single paint op — no rebuild, no tear-down.
-                IndexedStack(
-                  index: selectedIndexHistory.isEmpty
-                      ? 0
-                      : selectedIndexHistory.last,
-                  children: pages.map((p) => p.widget).toList(),
-                ),
-              ],
-            ),
-            bottomNavigationBar: blurBottomNav
+            extendBody: blurBottomNav && !isLargeScreen,
+            body: isLargeScreen
+                ? Row(
+                    children: [
+                      NavigationRail(
+                        selectedIndex: homeNavSelectedIndex,
+                        onDestinationSelected: (int index) async {
+                          HapticFeedback.selectionClick();
+                          switchToPage(index);
+                        },
+                        labelType: NavigationRailLabelType.all,
+                        destinations: homeNavRailDestinations,
+                        backgroundColor: scheme.surface,
+                      ),
+                      VerticalDivider(
+                        width: 1,
+                        thickness: 1,
+                        color: scheme.outlineVariant.withAlpha(50),
+                      ),
+                      Expanded(
+                        child: IndexedStack(
+                          index: homeNavSelectedIndex,
+                          children: pages.map((p) => p.widget).toList(),
+                        ),
+                      ),
+                    ],
+                  )
+                : Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      // IndexedStack keeps all four pages mounted so tab switches
+                      // are a single paint op — no rebuild, no tear-down.
+                      IndexedStack(
+                        index: homeNavSelectedIndex,
+                        children: pages.map((p) => p.widget).toList(),
+                      ),
+                    ],
+                  ),
+            bottomNavigationBar: isLargeScreen
+                ? null
+                : blurBottomNav
                 ? ClipRect(
                     child: Stack(
                       alignment: Alignment.bottomCenter,

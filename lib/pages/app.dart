@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:easy_localization/easy_localization.dart';
+import 'package:expressive_loading_indicator/expressive_loading_indicator.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
@@ -281,6 +282,7 @@ class AppPage extends StatefulWidget {
     this.showOppositeOfPreferredView = false,
     this.openInEditMode = false,
     this.appsListHeroFolderId,
+    this.isEmbedded = false,
   });
 
   final String appId;
@@ -292,16 +294,26 @@ class AppPage extends StatefulWidget {
   /// When true (e.g. swipe-to-edit), enter inline edit mode once the app is loaded.
   final bool openInEditMode;
 
+  final bool isEmbedded;
+
   @override
   State<AppPage> createState() => _AppPageState();
 }
 
 class _AppPageState extends State<AppPage> {
   static const Duration _detailPageAutoCheckCooldown = Duration(minutes: 1);
-  static const double _versionRowLabelWidth = 120;
+  // 92 + the 8px gap after the label = a 100px value-column offset, matching
+  // the details card's detailRow (label width 100, no gap) so the two cards'
+  // value columns line up vertically.
+  static const double _versionRowLabelWidth = 92;
 
   late final WebViewController _webViewController;
   bool _webViewUrlLoaded = false;
+  // True while the in-app webpage is loading, to drive the loading indicator.
+  bool _webViewLoading = false;
+  // Height (logical px) of the translucent top bar the webpage scrolls behind.
+  // Injected into the page as top padding so its top content stays tappable.
+  double _webViewTopInset = 0;
   bool _scheduledDetailPageRefresh = false;
   bool _requestedMissingIconLoad = false;
   // Once true, the lazy APKMirror size resolver has fired for this AppPage
@@ -410,7 +422,9 @@ class _AppPageState extends State<AppPage> {
   }
 
   void _handleBottomActionBarSizeChanged(Size size) {
-    if (!mounted || _bottomActionBarHeight == size.height) return;
+    if (!mounted) return;
+    if (size.height == 0) return;
+    if (_bottomActionBarHeight == size.height) return;
     setState(() {
       _bottomActionBarHeight = size.height;
     });
@@ -437,6 +451,7 @@ class _AppPageState extends State<AppPage> {
       _cachedPageTheme = null;
       _cachedPageThemeKey = null;
       _webViewUrlLoaded = false;
+      _webViewLoading = false;
       _scheduledDetailPageRefresh = false;
       _requestedMissingIconLoad = false;
       _attemptedApkMirrorSizeResolution = false;
@@ -858,7 +873,9 @@ class _AppPageState extends State<AppPage> {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: showErrorDetails
+              ? CrossAxisAlignment.start
+              : CrossAxisAlignment.center,
           spacing: 12,
           children: [
             Container(
@@ -1456,8 +1473,35 @@ class _AppPageState extends State<AppPage> {
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setNavigationDelegate(
         NavigationDelegate(
+          // The loading indicator covers only the initial page load (started
+          // when loadRequest is issued). We never re-show it on later
+          // navigations: sites like GitHub fire onPageStarted again after
+          // finishing, which would otherwise leave the spinner running for
+          // several seconds after the page is already visible.
+          onProgress: (int progress) {
+            if (progress >= 100 && mounted && _webViewLoading) {
+              setState(() => _webViewLoading = false);
+            }
+          },
+          onPageFinished: (String url) {
+            if (mounted && _webViewLoading) {
+              setState(() => _webViewLoading = false);
+            }
+            // Pad the page down by the translucent top bar's height so its top
+            // content (e.g. a sign-in button) stays tappable while the rest
+            // still scrolls behind the bar, visible through its translucency.
+            if (_webViewTopInset > 0) {
+              _webViewController.runJavaScript(
+                'if(document.body){document.body.style.paddingTop='
+                '"${_webViewTopInset.toStringAsFixed(0)}px";}',
+              );
+            }
+          },
           onWebResourceError: (WebResourceError error) {
             if (error.isForMainFrame == true) {
+              if (mounted && _webViewLoading) {
+                setState(() => _webViewLoading = false);
+              }
               _showPageError(
                 ObtainiumError(error.description, unexpected: true),
                 context,
@@ -1921,8 +1965,12 @@ class _AppPageState extends State<AppPage> {
         app?.app.additionalSettings['versionDetection'] == true ||
         app?.app.additionalSettings['versionDetection'] == null;
 
+    if (showAppWebpageFinal) {
+      _webViewTopInset = MediaQuery.paddingOf(context).top + kToolbarHeight;
+    }
     if (showAppWebpageFinal && app != null && !_webViewUrlLoaded) {
       _webViewUrlLoaded = true;
+      _webViewLoading = true;
       final String webUrl = app.app.url;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -3335,25 +3383,47 @@ class _AppPageState extends State<AppPage> {
       );
 
       if (small) {
+        // Header laid out like the normal app details page: icon on the left,
+        // with the name and developer left-aligned beside it (rather than
+        // centered and stacked).
         return Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(height: 0),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
-              children: [iconWidget],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              app?.name ?? tr('app'),
-              textAlign: TextAlign.center,
-              style: dialogColumnTheme.textTheme.displaySmall,
-            ),
-            Text(
-              tr('byX', args: [app?.author ?? tr('unknown')]),
-              textAlign: TextAlign.center,
-              style: dialogColumnTheme.textTheme.headlineSmall,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                iconWidget,
+                const SizedBox(width: 12),
+                // Flexible (not Expanded) so the icon + text sit centered as a
+                // block for short names, while long names can still wrap/shrink.
+                Flexible(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        app?.name ?? tr('app'),
+                        style: dialogColumnTheme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        tr('byX', args: [app?.author ?? tr('unknown')]),
+                        style: dialogColumnTheme.textTheme.bodySmall?.copyWith(
+                          color: dialogColumnTheme.colorScheme.onSurfaceVariant,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
             SizedBox(height: settingsProvider.highlightTouchTargets ? 2 : 8),
             getInfoColumn(themeContext, small: true),
@@ -3892,8 +3962,13 @@ class _AppPageState extends State<AppPage> {
     Widget getBottomActionBar(BuildContext themeContext) {
       final bool gestureNavigationActive =
           MediaQuery.systemGestureInsetsOf(themeContext).bottom > 0;
+      final bool isLandscapeEmbedded =
+          widget.isEmbedded &&
+          MediaQuery.of(themeContext).orientation == Orientation.landscape;
       Widget actionBarContent = Padding(
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+        padding: isLandscapeEmbedded
+            ? const EdgeInsets.fromLTRB(16, 6, 16, 6)
+            : const EdgeInsets.fromLTRB(16, 10, 16, 8),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -3959,30 +4034,36 @@ class _AppPageState extends State<AppPage> {
                       color: Theme.of(themeContext).colorScheme.primary,
                       iconSize: 24,
                       onPressed: () {
-                        showDialog<void>(
+                        showModalBottomSheet<void>(
                           context: context,
-                          builder: (BuildContext dialogRouteContext) {
+                          isScrollControlled: true,
+                          useSafeArea: true,
+                          showDragHandle: true,
+                          backgroundColor: pageThemeForPage.colorScheme.surface,
+                          // Full width — override the M3 default that caps the
+                          // sheet width on wide screens.
+                          constraints: const BoxConstraints(
+                            maxWidth: double.infinity,
+                          ),
+                          builder: (BuildContext sheetRouteContext) {
                             return Theme(
                               data: pageThemeForPage,
                               child: Builder(
-                                builder: (BuildContext dialogThemedContext) {
-                                  return AlertDialog(
-                                    scrollable: true,
-                                    content: getFullInfoColumn(
-                                      dialogThemedContext,
-                                      small: true,
-                                    ),
-                                    title: Text(app.name),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () {
-                                          Navigator.of(
-                                            dialogRouteContext,
-                                          ).pop();
-                                        },
-                                        child: Text(tr('continue')),
+                                builder: (BuildContext sheetThemedContext) {
+                                  return SafeArea(
+                                    top: false,
+                                    child: SingleChildScrollView(
+                                      padding: const EdgeInsets.fromLTRB(
+                                        16,
+                                        0,
+                                        16,
+                                        16,
                                       ),
-                                    ],
+                                      child: getFullInfoColumn(
+                                        sheetThemedContext,
+                                        small: true,
+                                      ),
+                                    ),
                                   );
                                 },
                               ),
@@ -4083,6 +4164,18 @@ class _AppPageState extends State<AppPage> {
           ],
         ),
       );
+      if (isLandscapeEmbedded) {
+        actionBarContent = IconButtonTheme(
+          data: IconButtonThemeData(
+            style: ButtonStyle(
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              minimumSize: WidgetStateProperty.all(const Size(36, 36)),
+              padding: WidgetStateProperty.all(const EdgeInsets.all(4)),
+            ),
+          ),
+          child: actionBarContent,
+        );
+      }
       if (gestureNavigationActive) {
         actionBarContent = SafeArea(top: false, child: actionBarContent);
       }
@@ -4091,7 +4184,9 @@ class _AppPageState extends State<AppPage> {
           color: Theme.of(themeContext).brightness == Brightness.dark
               ? Theme.of(themeContext).colorScheme.surfaceContainerHigh
               : Theme.of(themeContext).colorScheme.surfaceContainerHighest,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: isLandscapeEmbedded
+              ? const BorderRadius.vertical(top: Radius.circular(16))
+              : const BorderRadius.vertical(top: Radius.circular(24)),
           border: Border(
             top: BorderSide(
               color: Theme.of(themeContext).brightness == Brightness.dark
@@ -4190,12 +4285,37 @@ class _AppPageState extends State<AppPage> {
               }
             },
             child: Scaffold(
+              extendBody: true,
+              // Webpage mode: the WebView fills the whole body and renders
+              // behind a translucent top bar, so the page scrolls *behind* the
+              // bar (visible through its translucency). The page is padded down
+              // by the bar height (see the onPageFinished JS injection of
+              // _webViewTopInset) so its top content stays tappable instead of
+              // being trapped under the bar. A true gaussian blur isn't possible
+              // over an Android platform view, so this is a translucent tint.
+              extendBodyBehindAppBar: showAppWebpageFinal,
               resizeToAvoidBottomInset: true,
-              appBar: showAppWebpageFinal ? AppBar() : null,
-              backgroundColor: appPageDeeperSurfaceColor(
-                pageColorSchemeForPage.surface,
-                pageBrightness,
-              ),
+              appBar: showAppWebpageFinal
+                  ? AppBar(
+                      backgroundColor: appPageDeeperSurfaceColor(
+                        pageColorSchemeForPage.surface,
+                        pageBrightness,
+                      ).withValues(alpha: 0.82),
+                      surfaceTintColor: Colors.transparent,
+                      elevation: 0,
+                      scrolledUnderElevation: 0,
+                      iconTheme: IconThemeData(
+                        color: pageColorSchemeForPage.onSurface,
+                      ),
+                    )
+                  : null,
+              backgroundColor:
+                  settingsProvider.useGradientBackground && widget.isEmbedded
+                  ? Colors.transparent
+                  : appPageDeeperSurfaceColor(
+                      pageColorSchemeForPage.surface,
+                      pageBrightness,
+                    ),
               floatingActionButton: _editModeFloatingActionButtons(
                 themedPageContext,
                 app,
@@ -4208,12 +4328,36 @@ class _AppPageState extends State<AppPage> {
                 displacement: 20,
                 child: showAppWebpageFinal
                     ? Stack(
+                        // StackFit.expand gives the (non-positioned) WebView the
+                        // full body size; without it the Stack defaults to
+                        // StackFit.loose and collapses onto the normally-empty
+                        // error overlay, starving the WebView of size so it
+                        // renders blank.
+                        fit: StackFit.expand,
                         children: [
-                          Positioned.fill(
-                            child: getAppWebView(themedPageContext),
-                          ),
-                          SafeArea(
-                            bottom: false,
+                          // #3: WebView fills the whole body (behind the top
+                          // bar and bottom action bar) so it reaches the screen
+                          // edges instead of stopping above the action bar.
+                          getAppWebView(themedPageContext),
+                          // #1: loading indicator until the page finishes — the
+                          // WebView is blank for a few seconds otherwise.
+                          if (_webViewLoading)
+                            Center(
+                              child: ExpressiveLoadingIndicator(
+                                color: pageColorSchemeForPage.primary,
+                              ),
+                            ),
+                          // #4: error / verification banner pinned just below
+                          // the (translucent, body-overlapping) app bar at its
+                          // natural height. Positioned (not a non-positioned
+                          // child) so StackFit.expand can't stretch it to fill
+                          // the screen.
+                          Positioned(
+                            top:
+                                MediaQuery.paddingOf(themedPageContext).top +
+                                kToolbarHeight,
+                            left: 0,
+                            right: 0,
                             child: _buildPersistentPageError(
                               themedPageContext,
                               pageThemeForPage,
@@ -4223,106 +4367,122 @@ class _AppPageState extends State<AppPage> {
                           ),
                         ],
                       )
-                    : CustomScrollView(
-                        scrollCacheExtent: const ScrollCacheExtent.pixels(1600),
-                        controller: _appPageScrollController,
-                        physics: const AlwaysScrollableScrollPhysics(
-                          parent: ClampingScrollPhysics(),
-                        ),
-                        slivers: [
-                          SliverToBoxAdapter(
-                            child: SafeArea(
-                              top: true,
-                              bottom: false,
-                              child: Padding(
-                                padding: const EdgeInsets.only(top: 12),
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.center,
-                                      children: [
-                                        IconButton(
-                                          icon: const Icon(Icons.arrow_back),
-                                          // Pin to the per-app PRIMARY
-                                          // colour. The previous attempt
-                                          // used [colorScheme.onSurface],
-                                          // which on light themes is a
-                                          // near-black and on dark themes
-                                          // a near-white - effectively the
-                                          // same value the main app theme
-                                          // produces, so the per-app tint
-                                          // wasn't visible.
-                                          // [colorScheme.primary] is the
-                                          // accent derived from this app's
-                                          // icon, so the back button now
-                                          // visibly belongs to the page.
-                                          color: pageThemeForPage
-                                              .colorScheme
-                                              .primary,
-                                          onPressed: updating
-                                              ? null
-                                              : () => Navigator.of(
-                                                  themedPageContext,
-                                                ).maybePop(),
-                                          tooltip: MaterialLocalizations.of(
-                                            themedPageContext,
-                                          ).backButtonTooltip,
-                                        ),
-                                        Expanded(
-                                          child: buildDetailHeroContent(
-                                            themedPageContext,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    if (_editMode && app != null)
-                                      _buildEditMetadataSection(
-                                        themedPageContext,
-                                        app,
-                                        appsProvider,
-                                        settingsProvider,
-                                      )
-                                    else ...[
-                                      _buildPersistentPageError(
-                                        themedPageContext,
-                                        pageThemeForPage,
-                                        effectivePersistentPageError,
-                                        title:
-                                            buildVerificationPersistentPageError,
-                                      ),
-                                      getInfoColumn(
-                                        themedPageContext,
-                                        small: false,
-                                      ),
-                                    ],
-                                    Padding(
-                                      padding: const EdgeInsets.fromLTRB(
-                                        16,
-                                        0,
-                                        16,
-                                        16,
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Expanded(
-                                            child: getBottomCenterActions(
-                                              themedPageContext,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    if (_editMode)
-                                      SizedBox(
-                                        height: _editModeBottomSpacerHeight,
-                                      ),
-                                  ],
+                    : Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          if (settingsProvider.useGradientBackground &&
+                              widget.isEmbedded)
+                            Positioned.fill(
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  gradient: pageColorSchemeForPage
+                                      .schemePageBackgroundGradient,
                                 ),
                               ),
                             ),
+                          CustomScrollView(
+                            scrollCacheExtent: const ScrollCacheExtent.pixels(
+                              1600,
+                            ),
+                            controller: _appPageScrollController,
+                            physics: const AlwaysScrollableScrollPhysics(
+                              parent: ClampingScrollPhysics(),
+                            ),
+                            slivers: [
+                              SliverToBoxAdapter(
+                                child: SafeArea(
+                                  top: true,
+                                  bottom: false,
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(top: 12),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.center,
+                                          children: [
+                                            if (!widget.isEmbedded)
+                                              IconButton(
+                                                icon: const Icon(
+                                                  Icons.arrow_back,
+                                                ),
+                                                color: pageThemeForPage
+                                                    .colorScheme
+                                                    .primary,
+                                                onPressed: updating
+                                                    ? null
+                                                    : () => Navigator.of(
+                                                        themedPageContext,
+                                                      ).maybePop(),
+                                                tooltip:
+                                                    MaterialLocalizations.of(
+                                                      themedPageContext,
+                                                    ).backButtonTooltip,
+                                              ),
+                                            if (widget.isEmbedded)
+                                              const SizedBox(width: 16),
+                                            Expanded(
+                                              child: buildDetailHeroContent(
+                                                themedPageContext,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        if (_editMode && app != null)
+                                          _buildEditMetadataSection(
+                                            themedPageContext,
+                                            app,
+                                            appsProvider,
+                                            settingsProvider,
+                                          )
+                                        else ...[
+                                          _buildPersistentPageError(
+                                            themedPageContext,
+                                            pageThemeForPage,
+                                            effectivePersistentPageError,
+                                            title:
+                                                buildVerificationPersistentPageError,
+                                          ),
+                                          getInfoColumn(
+                                            themedPageContext,
+                                            small: false,
+                                          ),
+                                        ],
+                                        Padding(
+                                          padding: const EdgeInsets.fromLTRB(
+                                            16,
+                                            0,
+                                            16,
+                                            16,
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Expanded(
+                                                child: getBottomCenterActions(
+                                                  themedPageContext,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        if (_editMode)
+                                          SizedBox(
+                                            height: _editModeBottomSpacerHeight,
+                                          )
+                                        else
+                                          SizedBox(
+                                            height: _bottomActionBarHeight > 0
+                                                ? _bottomActionBarHeight
+                                                : 80,
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -4333,14 +4493,105 @@ class _AppPageState extends State<AppPage> {
                   }
                 },
               ),
-              bottomNavigationBar: _MeasureSize(
-                onChange: _handleBottomActionBarSizeChanged,
-                child: getBottomActionBar(themedPageContext),
-              ),
+              bottomNavigationBar: widget.isEmbedded
+                  ? _ScrollLinkedAppPageFooter(
+                      scrollController: _appPageScrollController,
+                      child: _MeasureSize(
+                        onChange: _handleBottomActionBarSizeChanged,
+                        child: getBottomActionBar(themedPageContext),
+                      ),
+                    )
+                  : _MeasureSize(
+                      onChange: _handleBottomActionBarSizeChanged,
+                      child: getBottomActionBar(themedPageContext),
+                    ),
             ),
           );
         },
       ),
+    );
+  }
+}
+
+class _ScrollLinkedAppPageFooter extends StatefulWidget {
+  const _ScrollLinkedAppPageFooter({
+    required this.scrollController,
+    required this.child,
+  });
+
+  final ScrollController scrollController;
+  final Widget child;
+
+  @override
+  State<_ScrollLinkedAppPageFooter> createState() =>
+      _ScrollLinkedAppPageFooterState();
+}
+
+class _ScrollLinkedAppPageFooterState
+    extends State<_ScrollLinkedAppPageFooter> {
+  bool _footerExpanded = true;
+  double _previousOffset = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void didUpdateWidget(covariant _ScrollLinkedAppPageFooter oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.scrollController != widget.scrollController) {
+      oldWidget.scrollController.removeListener(_onScroll);
+      widget.scrollController.addListener(_onScroll);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.scrollController.removeListener(_onScroll);
+    super.dispose();
+  }
+
+  void _onScroll() {
+    final ScrollController controller = widget.scrollController;
+    if (!controller.hasClients) {
+      return;
+    }
+    final double currentOffset = controller.offset;
+    final double delta = currentOffset - _previousOffset;
+    _previousOffset = currentOffset;
+    if (currentOffset <= 24) {
+      if (!_footerExpanded) {
+        setState(() {
+          _footerExpanded = true;
+        });
+      }
+      return;
+    }
+    const double scrollSensitivity = 10;
+    if (delta > scrollSensitivity) {
+      if (_footerExpanded) {
+        setState(() {
+          _footerExpanded = false;
+        });
+      }
+    } else if (delta < -scrollSensitivity) {
+      if (!_footerExpanded) {
+        setState(() {
+          _footerExpanded = true;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSlide(
+      offset: _footerExpanded ? Offset.zero : const Offset(0, 1.0),
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.fastOutSlowIn,
+      child: widget.child,
     );
   }
 }
