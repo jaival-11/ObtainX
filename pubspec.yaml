@@ -35,31 +35,32 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.9
-  path_provider: ^2.1.5
+  path_provider: ^2.1.6
   flutter_fgbg: ^0.8.0
-  flutter_local_notifications: ^22.0.0-dev.3
+  flutter_local_notifications: ^22.0.1
   provider: ^6.1.5+1
   http: ^1.6.0
-  webview_flutter: ^4.13.1
+  webview_flutter: ^4.14.0
   # Upstream Material `dynamic_color` package. We use only `DynamicColorBuilder`
   # and the `.harmonized()` ColorScheme extension - both available in the
   # upstream package - so the previous `dynamic_system_colors` fork (which
   # added APIs we don't use) was swapped out for the upstream to unblock the
   # bruckcode M3E packages, which transitively depend on `dynamic_color` and
   # would otherwise collide with the fork's identical Android plugin class.
+  # NOTE: upstream Obtainium uses `dynamic_system_colors` here — intentional divergence, do not "fix".
   dynamic_color: ^1.8.1
   html: ^0.15.6
   shared_preferences: ^2.5.5
   url_launcher: ^6.3.2
-  permission_handler: ^12.0.1
-  fluttertoast: ^9.0.0
+  permission_handler: ^12.0.3
+  fluttertoast: ^9.1.0
   device_info_plus: ^13.1.0
   # Pinned: 12.0.0-beta.7 fails to compile its Android sources (cascading
   # "Unresolved reference 'FileUtils'" errors); beta.5 is the last known-good.
   # The `^` caret let `pub upgrade` jump to the broken beta.7 — drop the pin
-  # once a fixed release ships.
+  # once a fixed release ships. NOTE: upstream uses ^12.0.0-beta.7 — intentional pin, do not "fix".
   file_picker: 12.0.0-beta.5
-  animations: ^2.1.2
+  animations: ^2.2.0
   android_package_installer: # TODO: See if PR will be accepted (dev may not be active), else remove this comment
     git:
       url: https://github.com/ImranR98/android_package_installer
@@ -69,10 +70,11 @@ dependencies:
       url: https://github.com/ImranR98/android_package_manager
       ref: master
   share_plus: ^13.1.0
-  sqflite: ^2.4.2
+  sqflite: ^2.4.3
   easy_localization: ^3.0.8
   android_intent_plus: ^6.0.0
-  flutter_archive: ^6.0.4
+  flutter_archive: ^6.3.1
+  archive: ^4.0.9
   hsluv: ^1.1.3
   connectivity_plus: ^7.1.1
   shared_storage: # TODO: Is this maintained?
@@ -81,8 +83,8 @@ dependencies:
       ref: master
   crypto: ^3.0.7
   bcrypt: ^1.2.0
-  app_links: ^7.0.0
-  background_fetch: ^1.6.0
+  app_links: ^7.2.0
+  background_fetch: ^1.7.0
   equations: ^6.0.0
   android_system_font:
     git:
