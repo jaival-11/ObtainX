@@ -3420,6 +3420,7 @@ class AppsProvider with ChangeNotifier {
     var versionDetectionIsStandard =
         app.additionalSettings['versionDetection'] == 'auto' ||
         app.additionalSettings['versionDetection'] == 'standard' ||
+        app.additionalSettings['versionDetection'] == 'versionCode' ||
         app.additionalSettings['versionDetection'] == true ||
         app.additionalSettings['versionDetection'] == null;
     var naiveStandardVersionDetection =
@@ -3533,9 +3534,10 @@ class AppsProvider with ChangeNotifier {
         realInstalledVersion != null &&
         versionsEffectivelyEqual(realInstalledVersion, app.latestVersion);
     final bool canAutoDisable =
-        app.additionalSettings['versionDetection'] == 'auto' ||
-        app.additionalSettings['versionDetection'] == true ||
-        app.additionalSettings['versionDetection'] == null;
+        app.additionalSettings['useVersionCodeAsOSVersion'] != true &&
+        (app.additionalSettings['versionDetection'] == 'auto' ||
+            app.additionalSettings['versionDetection'] == true ||
+            app.additionalSettings['versionDetection'] == null);
     if (canAutoDisable &&
         !trackOnly &&
         installedInfo != null &&

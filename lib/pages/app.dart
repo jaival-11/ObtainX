@@ -64,7 +64,7 @@ bool _isInstalledVersionPseudo(AppInMemory appInMemory) {
     return false;
   }
   final String? realInstalledVersion =
-      appModel.additionalSettings['useVersionCodeAsOSVersion'] == true
+      _usesVersionCodeAsOsVersion(appModel)
       ? installedInfo.versionCode.toString()
       : installedInfo.versionName;
   if (realInstalledVersion == null || realInstalledVersion.isEmpty) {
@@ -76,6 +76,11 @@ bool _isInstalledVersionPseudo(AppInMemory appInMemory) {
   );
 }
 
+bool _usesVersionCodeAsOsVersion(App appModel) {
+  return appModel.additionalSettings['useVersionCodeAsOSVersion'] == true ||
+      appModel.additionalSettings['versionDetection'] == 'versionCode';
+}
+
 /// The real OS-reported installed version (versionName, or versionCode when the
 /// app uses useVersionCodeAsOSVersion). Null when nothing is installed. Surfaced
 /// on the app page only when the displayed version is a pseudo-version, so the
@@ -83,7 +88,7 @@ bool _isInstalledVersionPseudo(AppInMemory appInMemory) {
 String? _realOsInstalledVersion(AppInMemory appInMemory) {
   final installedInfo = appInMemory.installedInfo;
   if (installedInfo == null) return null;
-  return appInMemory.app.additionalSettings['useVersionCodeAsOSVersion'] == true
+  return _usesVersionCodeAsOsVersion(appInMemory.app)
       ? installedInfo.versionCode.toString()
       : installedInfo.versionName;
 }
@@ -1983,6 +1988,7 @@ class _AppPageState extends State<AppPage> {
     bool isVersionDetectionStandard =
         app?.app.additionalSettings['versionDetection'] == 'auto' ||
         app?.app.additionalSettings['versionDetection'] == 'standard' ||
+        app?.app.additionalSettings['versionDetection'] == 'versionCode' ||
         app?.app.additionalSettings['versionDetection'] == true ||
         app?.app.additionalSettings['versionDetection'] == null;
 
@@ -2047,8 +2053,33 @@ class _AppPageState extends State<AppPage> {
       String label,
       String value, {
       bool pseudoVersion = false,
+      bool versionCode = false,
       String? osInstalledVersion,
     }) {
+      Widget versionChip(String text) {
+        final ColorScheme scheme = Theme.of(ctx).colorScheme;
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(
+            color: Color.alphaBlend(
+              scheme.primary.withValues(alpha: 0.08),
+              scheme.surfaceContainerHighest,
+            ),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: scheme.outlineVariant.withValues(alpha: 0.9),
+            ),
+          ),
+          child: Text(
+            text,
+            style: Theme.of(ctx).textTheme.labelSmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        );
+      }
+
       return Padding(
         padding: const EdgeInsets.only(bottom: 6),
         child: Row(
@@ -2083,26 +2114,8 @@ class _AppPageState extends State<AppPage> {
                       fontStyle: pseudoVersion ? FontStyle.italic : null,
                     ),
                   ),
-                  if (pseudoVersion)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Theme.of(
-                          ctx,
-                        ).colorScheme.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        tr('pseudoVersion'),
-                        style: Theme.of(ctx).textTheme.labelSmall?.copyWith(
-                          color: Theme.of(ctx).colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
+                  if (pseudoVersion) versionChip(tr('pseudoVersion')),
+                  if (versionCode) versionChip(tr('versionCode')),
                   if (pseudoVersion &&
                       osInstalledVersion != null &&
                       osInstalledVersion.isNotEmpty)
@@ -2598,6 +2611,7 @@ class _AppPageState extends State<AppPage> {
               tr('installed'),
               app?.app.installedVersion ?? '',
               pseudoVersion: app != null && _isInstalledVersionPseudo(app),
+              versionCode: app != null && _usesVersionCodeAsOsVersion(app.app),
               osInstalledVersion: app == null
                   ? null
                   : _realOsInstalledVersion(app),

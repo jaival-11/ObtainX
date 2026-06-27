@@ -548,6 +548,8 @@ class AddAppPageState extends State<AddAppPage> {
           if (appsProvider.apps.containsKey(app.id)) {
             throw ObtainiumError(tr('appAlreadyAdded'));
           }
+          app.additionalSettings['useVersionCodeAsOSVersion'] =
+              app.additionalSettings['versionDetection'] == 'versionCode';
           if (app.additionalSettings['trackOnly'] == true) {
             app.installedVersion = null;
             if (isTempId(app)) {
