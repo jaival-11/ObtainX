@@ -27,6 +27,7 @@ import 'package:obtainium/providers/native_provider.dart';
 import 'package:obtainium/providers/settings_provider.dart';
 import 'package:obtainium/providers/source_provider.dart';
 import 'package:obtainium/theme/app_theme_accent.dart';
+import 'package:obtainium/theme/app_segmented_button_theme.dart';
 import 'package:obtainium/theme/m3e_expressive_list.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -177,7 +178,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
     final List<String> visibleSettingsSectionKeys = [
       'updates',
-      if (sourceProvider.sources.any(
+      if (sourceProvider.sourceTemplates.any(
         (source) => source.sourceConfigSettingFormItems.isNotEmpty,
       ))
         'sourceSpecific',
@@ -187,31 +188,46 @@ class _SettingsPageState extends State<SettingsPage> {
       'interaction',
       'categories',
     ];
+    // Each section is wrapped in a RepaintBoundary so it composites to its own
+    // cached layer. The settings body is one eager Column inside a single
+    // SliverToBoxAdapter (unlike the apps list, which is a lazy ListView.builder
+    // that gets per-row RepaintBoundaries for free). Without boundaries the whole
+    // visible tree re-rasterizes every scroll frame — and because the scroll
+    // offset lands on sub-pixels, text/border anti-aliasing differs frame to
+    // frame, which reads as a shimmer/shiver while scrolling (made worse by the
+    // app bar's BackdropFilter, which forces the content beneath it to re-raster
+    // every frame). Cached layers just translate rigidly instead.
     Widget settingsCard(List<Widget> children) {
-      return m3eExpressiveSettingsCard(
-        context: context,
-        colorScheme: cs,
-        items: children,
+      return RepaintBoundary(
+        child: m3eExpressiveSettingsCard(
+          context: context,
+          colorScheme: cs,
+          items: children,
+        ),
       );
     }
 
     Widget collapsibleCard(String key, Widget child) {
-      return ValueListenableBuilder<Map<String, bool>>(
-        valueListenable: _expandedSettingsSections,
-        child: child,
-        builder: (context, expandedState, child) {
-          final bool expanded = _sectionExpanded(expandedState, key);
-          return ClipRect(
-            clipper: _SettingsSectionShadowClipper(expanded: expanded),
-            child: AnimatedAlign(
-              duration: const Duration(milliseconds: 360),
-              curve: Curves.easeInOutCubicEmphasized,
-              alignment: Alignment.topCenter,
-              heightFactor: expanded ? 1.0 : 0.0,
-              child: child,
-            ),
-          );
-        },
+      // RepaintBoundary: see settingsCard above for why each section is its own
+      // cached layer.
+      return RepaintBoundary(
+        child: ValueListenableBuilder<Map<String, bool>>(
+          valueListenable: _expandedSettingsSections,
+          child: child,
+          builder: (context, expandedState, child) {
+            final bool expanded = _sectionExpanded(expandedState, key);
+            return ClipRect(
+              clipper: _SettingsSectionShadowClipper(expanded: expanded),
+              child: AnimatedAlign(
+                duration: const Duration(milliseconds: 360),
+                curve: Curves.easeInOutCubicEmphasized,
+                alignment: Alignment.topCenter,
+                heightFactor: expanded ? 1.0 : 0.0,
+                child: child,
+              ),
+            );
+          },
+        ),
       );
     }
 
@@ -225,163 +241,171 @@ class _SettingsPageState extends State<SettingsPage> {
       )!;
       final Color collapsedHeaderContentColor = cs.onSecondaryContainer;
 
-      return ValueListenableBuilder<Map<String, bool>>(
-        valueListenable: _expandedSettingsSections,
-        builder: (context, expandedState, _) {
-          final bool expanded = _sectionExpanded(expandedState, key);
-          final Color headerContentColor = expanded
-              ? cs.primary
-              : collapsedHeaderContentColor;
-          final BorderSide outlineSide = expanded
-              ? BorderSide.none
-              : m3ePureBlackOutlineSide(cs, alpha: 0.16);
+      // RepaintBoundary: see settingsCard above for why each section is its own
+      // cached layer.
+      return RepaintBoundary(
+        child: ValueListenableBuilder<Map<String, bool>>(
+          valueListenable: _expandedSettingsSections,
+          builder: (context, expandedState, _) {
+            final bool expanded = _sectionExpanded(expandedState, key);
+            final Color headerContentColor = expanded
+                ? cs.primary
+                : collapsedHeaderContentColor;
+            final BorderSide outlineSide = expanded
+                ? BorderSide.none
+                : m3ePureBlackOutlineSide(cs, alpha: 0.16);
 
-          return AnimatedPadding(
-            duration: headerTransitionDuration,
-            curve: headerTransitionCurve,
-            padding: EdgeInsets.fromLTRB(0, expanded ? 20 : 16, 0, 8),
-            child: AnimatedContainer(
+            return AnimatedPadding(
               duration: headerTransitionDuration,
               curve: headerTransitionCurve,
-              decoration: BoxDecoration(
-                color: expanded ? Colors.transparent : collapsedHeaderColor,
-                borderRadius: BorderRadius.circular(expanded ? 8 : 28),
-                border: outlineSide == BorderSide.none
-                    ? null
-                    : Border.fromBorderSide(outlineSide),
-              ),
-              child: Material(
-                type: MaterialType.transparency,
-                child: InkWell(
-                  onTap: () => setSectionExpanded(key, !expanded),
+              padding: EdgeInsets.fromLTRB(0, expanded ? 20 : 16, 0, 8),
+              child: AnimatedContainer(
+                duration: headerTransitionDuration,
+                curve: headerTransitionCurve,
+                decoration: BoxDecoration(
+                  color: expanded ? Colors.transparent : collapsedHeaderColor,
                   borderRadius: BorderRadius.circular(expanded ? 8 : 28),
-                  splashFactory: NoSplash.splashFactory,
-                  splashColor: Colors.transparent,
-                  highlightColor: Colors.transparent,
-                  hoverColor: Colors.transparent,
-                  child: AnimatedPadding(
-                    duration: headerTransitionDuration,
-                    curve: headerTransitionCurve,
-                    padding: EdgeInsets.symmetric(
-                      horizontal: expanded ? 4 : 12,
-                      vertical: expanded ? 4 : 8,
-                    ),
-                    child: Row(
-                      children: [
-                        AnimatedContainer(
-                          duration: headerTransitionDuration,
-                          curve: headerTransitionCurve,
-                          width: expanded ? 20 : 30,
-                          height: expanded ? 20 : 30,
-                          decoration: BoxDecoration(
-                            color: expanded
-                                ? Colors.transparent
-                                : cs.primary.withValues(alpha: 0.16),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            icon,
-                            color: headerContentColor,
-                            size: expanded ? 16 : 17,
-                          ),
-                        ),
-                        SizedBox(width: expanded ? 8 : 10),
-                        Expanded(
-                          child: AnimatedDefaultTextStyle(
+                  border: outlineSide == BorderSide.none
+                      ? null
+                      : Border.fromBorderSide(outlineSide),
+                ),
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: InkWell(
+                    onTap: () => setSectionExpanded(key, !expanded),
+                    borderRadius: BorderRadius.circular(expanded ? 8 : 28),
+                    splashFactory: NoSplash.splashFactory,
+                    splashColor: Colors.transparent,
+                    highlightColor: Colors.transparent,
+                    hoverColor: Colors.transparent,
+                    child: AnimatedPadding(
+                      duration: headerTransitionDuration,
+                      curve: headerTransitionCurve,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: expanded ? 4 : 12,
+                        vertical: expanded ? 4 : 8,
+                      ),
+                      child: Row(
+                        children: [
+                          AnimatedContainer(
                             duration: headerTransitionDuration,
                             curve: headerTransitionCurve,
-                            style: TextStyle(
-                              fontWeight: expanded
-                                  ? FontWeight.w600
-                                  : FontWeight.w700,
-                              color: headerContentColor,
-                              fontSize: 13,
-                              letterSpacing: expanded ? 0 : 0.1,
-                              decoration: TextDecoration.none,
-                            ),
-                            child: Text(
-                              title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ),
-                        AnimatedContainer(
-                          duration: headerTransitionDuration,
-                          curve: headerTransitionCurve,
-                          width: expanded ? 20 : 32,
-                          height: expanded ? 20 : 32,
-                          decoration: BoxDecoration(
-                            color: expanded
-                                ? Colors.transparent
-                                : cs.surfaceContainerHighest,
-                            shape: BoxShape.circle,
-                          ),
-                          child: AnimatedRotation(
-                            turns: expanded ? 0.25 : 0,
-                            duration: headerTransitionDuration,
-                            curve: headerTransitionCurve,
-                            child: Icon(
-                              Icons.chevron_right_rounded,
+                            width: expanded ? 20 : 30,
+                            height: expanded ? 20 : 30,
+                            decoration: BoxDecoration(
                               color: expanded
-                                  ? cs.primary
-                                  : cs.onSurfaceVariant,
-                              size: expanded ? 18 : 20,
+                                  ? Colors.transparent
+                                  : cs.primary.withValues(alpha: 0.16),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              icon,
+                              color: headerContentColor,
+                              size: expanded ? 16 : 17,
                             ),
                           ),
-                        ),
-                      ],
+                          SizedBox(width: expanded ? 8 : 10),
+                          Expanded(
+                            child: AnimatedDefaultTextStyle(
+                              duration: headerTransitionDuration,
+                              curve: headerTransitionCurve,
+                              style: TextStyle(
+                                fontWeight: expanded
+                                    ? FontWeight.w600
+                                    : FontWeight.w700,
+                                color: headerContentColor,
+                                fontSize: 13,
+                                letterSpacing: expanded ? 0 : 0.1,
+                                decoration: TextDecoration.none,
+                              ),
+                              child: Text(
+                                title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                          AnimatedContainer(
+                            duration: headerTransitionDuration,
+                            curve: headerTransitionCurve,
+                            width: expanded ? 20 : 32,
+                            height: expanded ? 20 : 32,
+                            decoration: BoxDecoration(
+                              color: expanded
+                                  ? Colors.transparent
+                                  : cs.surfaceContainerHighest,
+                              shape: BoxShape.circle,
+                            ),
+                            child: AnimatedRotation(
+                              turns: expanded ? 0.25 : 0,
+                              duration: headerTransitionDuration,
+                              curve: headerTransitionCurve,
+                              child: Icon(
+                                Icons.chevron_right_rounded,
+                                color: expanded
+                                    ? cs.primary
+                                    : cs.onSurfaceVariant,
+                                size: expanded ? 18 : 20,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       );
     }
 
     Widget aboutSectionHeader() {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(0, 20, 0, 4),
+      // RepaintBoundary: see settingsCard above for why each section is its own
+      // cached layer.
+      return RepaintBoundary(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(4, 0, 4, 0),
-          child: Row(
-            children: [
-              Icon(Icons.info_rounded, color: cs.primary, size: 16),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  tr('about'),
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: cs.primary,
-                    fontSize: 13,
-                    decoration: TextDecoration.none,
+          padding: const EdgeInsets.fromLTRB(0, 20, 0, 4),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(4, 0, 4, 0),
+            child: Row(
+              children: [
+                Icon(Icons.info_rounded, color: cs.primary, size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    tr('about'),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: cs.primary,
+                      fontSize: 13,
+                      decoration: TextDecoration.none,
+                    ),
                   ),
                 ),
-              ),
-              IconButton(
-                onPressed: () => _openLogsDialog(context),
-                icon: const Icon(Icons.bug_report_outlined),
-                tooltip: tr('appLogs'),
-                color: cs.primary,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints.tightFor(
-                  width: 40,
-                  height: 40,
+                IconButton(
+                  onPressed: () => _openLogsDialog(context),
+                  icon: const Icon(Icons.bug_report_outlined),
+                  tooltip: tr('appLogs'),
+                  color: cs.primary,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints.tightFor(
+                    width: 40,
+                    height: 40,
+                  ),
+                  style: IconButton.styleFrom(
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
                 ),
-                style: IconButton.styleFrom(
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       );
     }
 
-    final double screenWidth = MediaQuery.of(context).size.width;
+    final double screenWidth = MediaQuery.sizeOf(context).width;
     final bool isLargeScreen = screenWidth >= kLargeScreenWidthBreakpoint;
 
     final List<_SettingsCategory> categoriesList = [
@@ -391,7 +415,7 @@ class _SettingsPageState extends State<SettingsPage> {
         icon: Icons.update_rounded,
         widget: _UpdatesSection(cs: cs, androidInfo: _androidInfo),
       ),
-      if (sourceProvider.sources.any(
+      if (sourceProvider.sourceTemplates.any(
         (s) => s.sourceConfigSettingFormItems.isNotEmpty,
       ))
         _SettingsCategory(
@@ -748,7 +772,7 @@ class _SettingsPageState extends State<SettingsPage> {
                               ),
                             ),
                             // ── Source-specific ───────────────────────────
-                            if (sourceProvider.sources.any(
+                            if (sourceProvider.sourceTemplates.any(
                               (s) => s.sourceConfigSettingFormItems.isNotEmpty,
                             )) ...[
                               sectionHeader(
@@ -1056,19 +1080,21 @@ class _UpdatesSection extends StatelessWidget {
             const SizedBox(height: 4),
             SizedBox(
               width: double.infinity,
-              child: SegmentedButton<String>(
+              child: AppSegmentedButton<String>(
                 segments: [
                   ButtonSegment<String>(
                     value: 'stock',
-                    label: Text(tr('installerModeStock')),
+                    label: AppSegmentedButtonLabel(tr('installerModeStock')),
                   ),
                   ButtonSegment<String>(
                     value: 'shizuku',
-                    label: Text(tr('installerModeShizuku')),
+                    label: AppSegmentedButtonLabel(tr('installerModeShizuku')),
                   ),
                   ButtonSegment<String>(
                     value: 'legacy',
-                    label: Text(tr('installerModeThirdParty')),
+                    label: AppSegmentedButtonLabel(
+                      tr('installerModeThirdParty'),
+                    ),
                   ),
                 ],
                 selected: {sp.installerMode},
@@ -1268,7 +1294,7 @@ class _SourceSpecificSection extends StatelessWidget {
     final SourceProvider sourceProvider = SourceProvider();
     final ColorScheme cs = Theme.of(context).colorScheme;
 
-    final sources = sourceProvider.sources
+    final sources = sourceProvider.sourceTemplates
         .where((s) => s.sourceConfigSettingFormItems.isNotEmpty)
         .toList();
 
@@ -1733,7 +1759,7 @@ class _InteractionSection extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(_swipeActionIcon(action), size: 18),
+              Icon(_swipeActionIcon(action), size: 18, color: cs.primary),
               const SizedBox(width: 12),
               Text(tr('swipeAction_${action.name}')),
             ],
@@ -1820,7 +1846,7 @@ class AboutSectionContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final SettingsProvider sp = context.read<SettingsProvider>();
     final TextTheme textTheme = Theme.of(context).textTheme;
-    final double screenWidth = MediaQuery.of(context).size.width;
+    final double screenWidth = MediaQuery.sizeOf(context).width;
     final bool isLargeScreen = screenWidth >= kLargeScreenWidthBreakpoint;
 
     return Stack(
@@ -1950,7 +1976,7 @@ class AboutSectionContent extends StatelessWidget {
                     const SizedBox(height: 10),
                     _AboutAppPromo(
                       colorScheme: colorScheme,
-                      assetPath: 'assets/graphics/remember_logo.png',
+                      assetPath: 'assets/graphics/logo_remember.png',
                       accentColor: const Color(0xFF74B84A),
                       name: tr('aboutRememberName'),
                       tagline: tr('aboutRememberTagline'),
@@ -1959,7 +1985,7 @@ class AboutSectionContent extends StatelessWidget {
                     const SizedBox(height: 10),
                     _AboutAppPromo(
                       colorScheme: colorScheme,
-                      assetPath: 'assets/graphics/filepipe_logo.png',
+                      assetPath: 'assets/graphics/logo_filepipe.png',
                       accentColor: const Color(0xFF5967D8),
                       name: tr('aboutFilePipeName'),
                       tagline: tr('aboutFilePipeTagline'),

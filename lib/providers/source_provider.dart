@@ -1521,6 +1521,15 @@ bool isVersionPseudo(App app) =>
         (app.additionalSettings['versionDetection'] == 'pseudo' ||
             app.additionalSettings['versionDetection'] == false));
 
+String toTitleCase(String text) {
+  if (text.isEmpty) return text;
+  return text
+      .split(RegExp(r'[\s\-_]+'))
+      .where((w) => w.isNotEmpty)
+      .map((w) => w[0].toUpperCase() + w.substring(1))
+      .join(' ');
+}
+
 class SourceProvider {
   static final Map<String, RegExp> _sourceRegexCache = {};
 
@@ -1583,8 +1592,22 @@ class SourceProvider {
   List<AppSource> get sources =>
       _sourceFactories.map((factory) => factory()).toList();
 
-  // Add more mass url source classes here so they are available via the service
-  List<MassAppUrlSource> massUrlSources = [GitHubStars()];
+  // Read-only view for callers that only read source properties (name, hosts,
+  // sourceConfigSettingFormItems) and never mutate the instances — e.g. the
+  // settings source-specific section and the filter-by-source sheet. Returns
+  // the shared cached templates so these callers don't reconstruct all ~25
+  // sources (each running many tr() calls) on every build. Callers MUST NOT
+  // mutate the returned instances; use `sources` if you need a fresh copy.
+  List<AppSource> get sourceTemplates => _sourceTemplates;
+
+  // Add more mass url source classes here so they are available via the service.
+  // Lazily built and cached: constructing a MassAppUrlSource runs tr() calls,
+  // and SourceProvider() is instantiated per app-list row / per build, so an
+  // eager field initializer rebuilt GitHubStars on every one. Read-only at all
+  // call sites (only ever `.map`-ed over), so a shared cached list is safe.
+  static List<MassAppUrlSource>? _massUrlSourcesCache;
+  List<MassAppUrlSource> get massUrlSources =>
+      _massUrlSourcesCache ??= [GitHubStars()];
 
   // `naiveStandardVersionDetection` depends only on the resolved source (which is
   // a function of host + overrideSource), so cache it per host to avoid a
@@ -1758,7 +1781,10 @@ class SourceProvider {
     if (additionalSettings['autoApkFilterByArch'] == true) {
       apk.apkUrls = await filterApksByArch(apk.apkUrls);
     }
-    final String sourceName = apk.names.name.trim();
+    String sourceName = apk.names.name.trim();
+    if (sourceName.isNotEmpty) {
+      sourceName = toTitleCase(sourceName);
+    }
     var name = currentApp != null ? currentApp.name.trim() : '';
     if (name.isEmpty ||
         name == currentApp?.id ||

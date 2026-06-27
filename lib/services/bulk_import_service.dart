@@ -825,13 +825,14 @@ class BulkImportService {
         return result;
       }
       try {
+        final String searchPkg = _cleanPackageNameForSearch(pkg);
         // Quoted id reduces unrelated matches; "in:file" scopes to file contents.
         final Uri uri = Uri(
           scheme: 'https',
           host: 'api.github.com',
           path: '/search/code',
           queryParameters: <String, String>{
-            'q': '"$pkg" in:file',
+            'q': '"$searchPkg" in:file',
             'per_page': '15',
           },
         );
@@ -843,6 +844,45 @@ class BulkImportService {
           if (decoded is Map<String, dynamic>) {
             final List<dynamic> items =
                 decoded['items'] as List<dynamic>? ?? <dynamic>[];
+
+            final Map<String, int> repoScores = <String, int>{};
+            for (final dynamic raw in items) {
+              if (raw is! Map<String, dynamic>) continue;
+              final Object? repo = raw['repository'];
+              if (repo is! Map<String, dynamic>) continue;
+              final String? repoName = repo['name'] as String?;
+              final String? htmlUrl = repo['html_url'] as String?;
+              if (htmlUrl == null || !htmlUrl.contains('github.com') || repoName == null) {
+                continue;
+              }
+              repoScores.putIfAbsent(htmlUrl, () {
+                final String lowerRepo = repoName.toLowerCase();
+                final List<String> pkgSegments = searchPkg.toLowerCase().split('.');
+                final Set<String> ignoreSegments = {
+                  'com', 'org', 'net', 'dev', 'github', 'android', 'app', 'apps', 'application'
+                };
+                int score = 0;
+                for (final String segment in pkgSegments) {
+                  if (ignoreSegments.contains(segment)) continue;
+                  if (lowerRepo == segment) {
+                    score += 100;
+                  } else if (lowerRepo.contains(segment)) {
+                    score += 50;
+                  } else if (segment.contains(lowerRepo)) {
+                    score += 30;
+                  }
+                }
+                return score;
+              });
+            }
+
+            int maxScore = 0;
+            for (final int score in repoScores.values) {
+              if (score > maxScore) {
+                maxScore = score;
+              }
+            }
+
             String? chosenUrl;
             for (final dynamic raw in items) {
               if (raw is! Map<String, dynamic>) continue;
@@ -851,9 +891,23 @@ class BulkImportService {
               if (repo is! Map<String, dynamic>) continue;
               final String? htmlUrl = repo['html_url'] as String?;
               if (htmlUrl == null || !htmlUrl.contains('github.com')) continue;
-              if (path.contains('androidmanifest') ||
+
+              final bool isDefinitionFile = path.contains('androidmanifest') ||
                   path.endsWith('build.gradle') ||
-                  path.endsWith('build.gradle.kts')) {
+                  path.endsWith('build.gradle.kts');
+
+              // If the repository name similarity score is 0, we only accept matches
+              // in definition files to avoid false positives from sibling/reference files.
+              final int score = repoScores[htmlUrl] ?? 0;
+              if (score == 0 && !isDefinitionFile) {
+                continue;
+              }
+
+              if (maxScore > 0 && score < maxScore) {
+                continue;
+              }
+
+              if (isDefinitionFile) {
                 chosenUrl = htmlUrl;
                 break;
               }
@@ -885,5 +939,30 @@ class BulkImportService {
         .trim()
         .replaceAll(RegExp(r'[\s_]+'), '-')
         .replaceAll(RegExp(r'-{2,}'), '-');
+  }
+
+  static String _cleanPackageNameForSearch(String pkg) {
+    final Set<String> commonSuffixes = {
+      'gh',
+      'dev',
+      'debug',
+      'release',
+      'obt',
+      'obtainium',
+      'fdroid',
+      'play',
+      'normal',
+      'foss',
+      'lite',
+      'free',
+    };
+    final List<String> parts = pkg.split('.');
+    if (parts.length > 3) {
+      final String lastPart = parts.last.toLowerCase();
+      if (commonSuffixes.contains(lastPart)) {
+        return parts.sublist(0, parts.length - 1).join('.');
+      }
+    }
+    return pkg;
   }
 }

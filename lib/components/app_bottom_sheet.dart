@@ -25,7 +25,7 @@ Future<T?> showAppModalSheet<T>({
   return showModalBottomSheet<T>(
     context: context,
     isScrollControlled: true,
-    showDragHandle: true,
+    showDragHandle: false,
     isDismissible: isDismissible,
     enableDrag: enableDrag,
     useRootNavigator: useRootNavigator,
@@ -37,14 +37,31 @@ Future<T?> showAppModalSheet<T>({
     shape: const RoundedRectangleBorder(borderRadius: _kSheetRadius),
     builder: (BuildContext sheetContext) {
       final Widget sheet = builder(sheetContext);
-      return fullWidth
-          ? sheet
-          : MediaQuery.removePadding(
-              context: sheetContext,
-              removeLeft: true,
-              removeRight: true,
-              child: sheet,
-            );
+      final ColorScheme colorScheme = Theme.of(sheetContext).colorScheme;
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Center(
+            child: Container(
+              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: colorScheme.onSurfaceVariant.withOpacity(0.4),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          fullWidth
+              ? sheet
+              : MediaQuery.removePadding(
+                  context: sheetContext,
+                  removeLeft: true,
+                  removeRight: true,
+                  child: sheet,
+                ),
+        ],
+      );
     },
   );
 }

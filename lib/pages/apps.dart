@@ -15,6 +15,7 @@ import 'package:flutter/rendering.dart'
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:progress_indicator_m3e/progress_indicator_m3e.dart';
+import 'package:obtainium/app_sources/apkmirror.dart';
 import 'package:obtainium/components/app_bottom_sheet.dart';
 import 'package:obtainium/components/bulk_category_editor.dart';
 import 'package:obtainium/components/category_action_chip.dart';
@@ -37,6 +38,7 @@ import 'package:obtainium/services/bulk_import_service.dart';
 import 'package:obtainium/services/bulk_scan_cache.dart';
 import 'package:obtainium/store_source_icons.dart';
 import 'package:obtainium/theme/app_theme_accent.dart';
+import 'package:obtainium/theme/app_segmented_button_theme.dart';
 import 'package:obtainium/theme/m3e_expressive_list.dart';
 import 'package:obtainium/widgets/help_hint_icon.dart';
 import 'package:provider/provider.dart';
@@ -548,11 +550,11 @@ class _AppListItem extends StatelessWidget {
 
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final double screenWidth = MediaQuery.of(context).size.width;
+    final double screenWidth = MediaQuery.sizeOf(context).width;
     final bool isLargeScreen = screenWidth >= kLargeScreenWidthBreakpoint;
     final bool hideVersionAndChangelog =
         isLargeScreen &&
-        MediaQuery.of(context).orientation == Orientation.portrait;
+        MediaQuery.orientationOf(context) == Orientation.portrait;
 
     final showChangesFn = getChangeLogFn(context, app.app);
     final installed = app.app.installedVersion;
@@ -606,8 +608,8 @@ class _AppListItem extends StatelessWidget {
       final trackOnly = app.app.additionalSettings['trackOnly'] == true;
       return IconButton(
         visualDensity: VisualDensity.compact,
-        padding: isLargeScreen ? EdgeInsets.zero : const EdgeInsets.all(8),
-        constraints: isLargeScreen ? const BoxConstraints() : null,
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints.tightFor(width: 32, height: 32),
         color: colorScheme.primary,
         tooltip: buildVerificationBlocked
             ? buildVerificationBlockedMessage
@@ -624,8 +626,8 @@ class _AppListItem extends StatelessWidget {
     Widget buildUncertainUpdateButton() {
       return IconButton(
         visualDensity: VisualDensity.compact,
-        padding: isLargeScreen ? EdgeInsets.zero : const EdgeInsets.all(8),
-        constraints: isLargeScreen ? const BoxConstraints() : null,
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints.tightFor(width: 32, height: 32),
         color: colorScheme.primary,
         tooltip: buildVerificationBlocked
             ? buildVerificationBlockedMessage
@@ -640,11 +642,13 @@ class _AppListItem extends StatelessWidget {
     Widget buildSkippedVersionIcon() {
       return Tooltip(
         message: tr('latestVersionSkipped'),
-        child: Padding(
-          padding: isLargeScreen ? EdgeInsets.zero : const EdgeInsets.all(8),
-          child: Icon(
-            Icons.skip_next_rounded,
-            color: colorScheme.onSurfaceVariant,
+        child: SizedBox.square(
+          dimension: 32,
+          child: Center(
+            child: Icon(
+              Icons.skip_next_rounded,
+              color: colorScheme.onSurfaceVariant,
+            ),
           ),
         ),
       );
@@ -666,18 +670,6 @@ class _AppListItem extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              if (skipActive) ...[
-                buildSkippedVersionIcon(),
-                if (!hideVersionAndChangelog) const SizedBox(width: 5),
-              ],
-              if (!skipActive && hasUpdate) ...[
-                buildUpdateButton(),
-                if (!hideVersionAndChangelog) const SizedBox(width: 5),
-              ],
-              if (!skipActive && !hasUpdate && hasUncertainUpdate) ...[
-                buildUncertainUpdateButton(),
-                if (!hideVersionAndChangelog) const SizedBox(width: 5),
-              ],
               if (!hideVersionAndChangelog)
                 GestureDetector(
                   onTap: showChangesFn,
@@ -707,7 +699,7 @@ class _AppListItem extends StatelessWidget {
                           children: [
                             Container(
                               constraints: BoxConstraints(
-                                maxWidth: MediaQuery.of(context).size.width / 4,
+                                maxWidth: MediaQuery.sizeOf(context).width / 4,
                               ),
                               child: Text(
                                 versionText,
@@ -740,6 +732,12 @@ class _AppListItem extends StatelessWidget {
                     ),
                   ),
                 ),
+              if (!hideVersionAndChangelog && hasTrailingWidgets)
+                const SizedBox(width: 5),
+              if (skipActive) buildSkippedVersionIcon(),
+              if (!skipActive && hasUpdate) buildUpdateButton(),
+              if (!skipActive && !hasUpdate && hasUncertainUpdate)
+                buildUncertainUpdateButton(),
             ],
           );
 
@@ -963,9 +961,10 @@ class _AppListItem extends StatelessWidget {
                   selectedTileColor: Colors.transparent,
                   selected: isSelected,
                   onLongPress: onLongPress,
-                  contentPadding: isLargeScreen
-                      ? const EdgeInsets.symmetric(horizontal: 12)
-                      : null,
+                  contentPadding: EdgeInsetsDirectional.only(
+                    start: isLargeScreen ? 12 : 16,
+                    end: hasTrailingWidgets ? 4 : (isLargeScreen ? 12 : 16),
+                  ),
                   leading: leadingWidget,
                   title: Row(
                     children: [
@@ -1042,7 +1041,7 @@ class _AppListItem extends StatelessWidget {
   }
 }
 
-/// Opens the full-screen Additional Options page (same transition as [AppPage]).
+/// Opens the full-screen Additional Options page (same transition as [AppPage]) or in split-pane second panel.
 Future<void> _openAdditionalOptionsModal(
   String appId,
   BuildContext context,
@@ -1050,10 +1049,26 @@ Future<void> _openAdditionalOptionsModal(
   final appsProvider = context.read<AppsProvider>();
   if (appsProvider.apps[appId] == null) return;
   if (!context.mounted) return;
-  await Navigator.push<void>(
-    context,
-    slideUpPageRoute((_) => AdditionalOptionsPage(appId: appId)),
-  );
+
+  final double screenWidth = MediaQuery.sizeOf(context).width;
+  final bool isLargeScreen = screenWidth >= kLargeScreenWidthBreakpoint;
+
+  if (isLargeScreen) {
+    final appsPageState = context.findAncestorStateOfType<AppsPageState>();
+    if (appsPageState != null) {
+      appsPageState.openAppById(appId, autoScroll: false);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        appsPageState.detailsNavKey?.currentState?.push(
+          slideUpPageRoute((_) => AdditionalOptionsPage(appId: appId)),
+        );
+      });
+    }
+  } else {
+    await Navigator.push<void>(
+      context,
+      slideUpPageRoute((_) => AdditionalOptionsPage(appId: appId)),
+    );
+  }
 }
 
 /// Wraps a list row with horizontal-swipe action hints.
@@ -1182,16 +1197,26 @@ class _SwipeableListItemState extends State<_SwipeableListItem>
         await _openAdditionalOptionsModal(widget.appId, context);
       case SwipeAction.edit:
         if (context.mounted) {
-          await Navigator.push(
-            context,
-            heroFriendlyAppPageRoute(
-              (_) => AppPage(
-                appId: widget.appId,
-                openInEditMode: true,
-                appsListHeroFolderId: widget.appsListHeroFolderId,
+          final double screenWidth = MediaQuery.sizeOf(context).width;
+          final bool isLargeScreen = screenWidth >= kLargeScreenWidthBreakpoint;
+
+          if (isLargeScreen) {
+            final appsPageState = context.findAncestorStateOfType<AppsPageState>();
+            if (appsPageState != null) {
+              appsPageState.openAppInEditMode(widget.appId, autoScroll: false);
+            }
+          } else {
+            await Navigator.push(
+              context,
+              heroFriendlyAppPageRoute(
+                (_) => AppPage(
+                  appId: widget.appId,
+                  openInEditMode: true,
+                  appsListHeroFolderId: widget.appsListHeroFolderId,
+                ),
               ),
-            ),
-          );
+            );
+          }
         }
       case SwipeAction.delete:
         if (app != null) {
@@ -1394,6 +1419,12 @@ Future<String> _loadLinkedChangeLog(
     if (decoded is Map<String, dynamic>) {
       return (decoded['body'] ?? '').toString();
     }
+  }
+  if (appSource is APKMirror) {
+    final apkMirrorChangeLog = await apkMirrorChangeLogFromReleasePageHtml(
+      response.body,
+    );
+    if (apkMirrorChangeLog != null) return apkMirrorChangeLog;
   }
   return response.body;
 }
@@ -1607,6 +1638,13 @@ void showChangeLogDialog(
   );
 }
 
+/// Compiled once at load time. Previously this was rebuilt on every call to
+/// [getChangeLogFn], which runs per visible row on every apps-list rebuild —
+/// compiling a RegExp per row per frame is pure main-thread waste.
+final RegExp _changeLogUrlRegExp = RegExp(
+  '(http|ftp|https)://([\\w_-]+(?:(?:\\.[\\w_-]+)+))([\\w.,@?^=%&:/~+#-]*[\\w@?^=%&/~+#-])?',
+);
+
 Null Function()? getChangeLogFn(BuildContext context, App app) {
   AppSource appSource = SourceProvider().getSource(
     app.url,
@@ -1615,10 +1653,10 @@ Null Function()? getChangeLogFn(BuildContext context, App app) {
   String? changesUrl = appSource.changeLogPageFromStandardUrl(app.url);
   String? changeLog = app.changeLog;
   if (changeLog?.split('\n').length == 1) {
-    if (RegExp(
-      '(http|ftp|https)://([\\w_-]+(?:(?:\\.[\\w_-]+)+))([\\w.,@?^=%&:/~+#-]*[\\w@?^=%&/~+#-])?',
-    ).hasMatch(changeLog!)) {
-      changesUrl ??= changeLog;
+    if (_changeLogUrlRegExp.hasMatch(changeLog!)) {
+      changesUrl = appSource is APKMirror
+          ? changeLog
+          : changesUrl ?? changeLog;
       changeLog = null;
     }
   }
@@ -2122,6 +2160,22 @@ const String _onDemandViewSettingsId = '__on_demand_only__';
 class AppsPageState extends State<AppsPage> {
   GlobalKey<NavigatorState>? detailsNavKey;
   String? _detailsNavKeyAppId;
+  bool _openSelectedInEditMode = false;
+
+  void openAppInEditMode(String appId, {bool autoScroll = true}) {
+    setState(() {
+      _openSelectedInEditMode = true;
+      selectedAppId = appId;
+      detailsNavKey = null;
+      _detailsNavKeyAppId = null;
+    });
+    if (autoScroll) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        scrollToApp(appId);
+      });
+    }
+  }
+
   GlobalKey<NavigatorState> _getDetailsNavKey(String appId) {
     if (_detailsNavKeyAppId != appId || detailsNavKey == null) {
       detailsNavKey = GlobalKey<NavigatorState>();
@@ -2232,6 +2286,16 @@ class AppsPageState extends State<AppsPage> {
   /// Indices of apps shown in the "Updates" group (groupUpdatesSeparately).
   List<int> _updatesGroupListedIndices = const [];
   int? _lastGroupIndexCacheToken;
+
+  // Folder/on-demand counts shown as sidebar/badge numbers. These are a pure
+  // function of app state + the folder set, so they're cached behind their own
+  // token instead of being recomputed (O(apps × folders)) on every build —
+  // selection toggles, swipe gestures, and the refresh indicator all rebuild
+  // [AppsPage] without changing any of these counts.
+  int? _lastFolderCountsToken;
+  int _onDemandOnlyAppCountCache = 0;
+  Map<String, int> _folderAppCountsCache = const {};
+  Map<String, int> _folderUpdateCountsCache = const {};
 
   // ── Group expansion state ─────────────────────────────────────────────────
   // Groups start expanded. When the user collapses one its key goes here and
@@ -2477,7 +2541,7 @@ class AppsPageState extends State<AppsPage> {
   /// Returns the human-readable display name for a source given its
   /// runtimeType string (the value stored in [AppsFilter.sourceFilter]).
   String _getSourceName(String sourceKey) {
-    for (final s in sourceProvider.sources) {
+    for (final s in sourceProvider.sourceTemplates) {
       if (s.runtimeType.toString() == sourceKey) return s.name;
     }
     return sourceKey;
@@ -3040,7 +3104,7 @@ class AppsPageState extends State<AppsPage> {
     // ── Use cached results ──────────────────────────────────────────────────
     var listedApps = _listedAppsCache;
 
-    final double screenWidth = MediaQuery.of(context).size.width;
+    final double screenWidth = MediaQuery.sizeOf(context).width;
     final bool isLargeScreen = screenWidth >= kLargeScreenWidthBreakpoint;
 
     // The two-panel layout needs an effective selection, but mutating
@@ -3069,35 +3133,44 @@ class AppsPageState extends State<AppsPage> {
 
     final existingUpdates = _existingUpdatesCache;
     final newInstalls = _newInstallsCache;
-    final int onDemandOnlyAppCount = appsProvider.apps.values
-        .where((a) => a.app.additionalSettings['onDemandOnly'] == true)
-        .length;
 
-    // Folder counts: number of non-on-demand apps in each folder.
+    // On-demand and per-folder app/update counts. Recomputed only when app
+    // state ([appsToken]) or the folder set changes — not on every rebuild.
+    // A single pass over the apps fills all three maps (previously this was
+    // three separate full scans, each O(apps × folders)).
     final appFolders = settingsProvider.appFolders;
-    final Map<String, int> folderAppCounts = {
-      for (final f in appFolders)
-        f.id: appsProvider.apps.values
-            .where(
-              (a) =>
-                  a.app.additionalSettings['onDemandOnly'] != true &&
-                  folderIdsForApp(a.app).contains(f.id),
-            )
-            .length,
-    };
-    // Update counts per folder (mirrors the badge logic on the home tab icon).
-    final Map<String, int> folderUpdateCounts = {
-      for (final f in appFolders)
-        f.id: appsProvider.apps.values
-            .where(
-              (a) =>
-                  a.app.additionalSettings['onDemandOnly'] != true &&
-                  folderIdsForApp(a.app).contains(f.id) &&
-                  (appHasActionableUpdate(a.app) ||
-                      versionOrderUncertainUpdate(a.app)),
-            )
-            .length,
-    };
+    final int folderCountsToken = Object.hash(
+      appsToken,
+      Object.hashAll(appFolders.map((f) => f.id)),
+    );
+    if (folderCountsToken != _lastFolderCountsToken) {
+      _lastFolderCountsToken = folderCountsToken;
+      int onDemand = 0;
+      final Map<String, int> appCounts = {for (final f in appFolders) f.id: 0};
+      final Map<String, int> updateCounts = {
+        for (final f in appFolders) f.id: 0,
+      };
+      for (final a in appsProvider.apps.values) {
+        if (a.app.additionalSettings['onDemandOnly'] == true) {
+          onDemand++;
+          continue;
+        }
+        final bool hasUpdate =
+            appHasActionableUpdate(a.app) || versionOrderUncertainUpdate(a.app);
+        for (final fid in folderIdsForApp(a.app)) {
+          final int? current = appCounts[fid];
+          if (current == null) continue; // folder no longer exists
+          appCounts[fid] = current + 1;
+          if (hasUpdate) updateCounts[fid] = updateCounts[fid]! + 1;
+        }
+      }
+      _onDemandOnlyAppCountCache = onDemand;
+      _folderAppCountsCache = appCounts;
+      _folderUpdateCountsCache = updateCounts;
+    }
+    final int onDemandOnlyAppCount = _onDemandOnlyAppCountCache;
+    final Map<String, int> folderAppCounts = _folderAppCountsCache;
+    final Map<String, int> folderUpdateCounts = _folderUpdateCountsCache;
     final String? currentFolderName = widget.folderId != null
         ? appFolders
               .where((f) => f.id == widget.folderId)
@@ -3105,17 +3178,20 @@ class AppsPageState extends State<AppsPage> {
               .firstOrNull
         : null;
 
+    // Membership set so the filters below are O(updates) instead of
+    // O(updates × apps) from a `listedApps.any(...)` scan per id.
+    final Set<String> listedAppIdSet = {for (final a in listedApps) a.app.id};
     var existingUpdateIdsAllOrSelected = existingUpdates
         .where(
           (element) => selectedAppIds.isEmpty
-              ? listedApps.any((a) => a.app.id == element)
+              ? listedAppIdSet.contains(element)
               : selectedAppIds.contains(element),
         )
         .toList();
     var newInstallIdsAllOrSelected = newInstalls
         .where(
           (element) => selectedAppIds.isEmpty
-              ? listedApps.any((a) => a.app.id == element)
+              ? listedAppIdSet.contains(element)
               : selectedAppIds.contains(element),
         )
         .toList();
@@ -3554,7 +3630,7 @@ class AppsPageState extends State<AppsPage> {
             )
           : null;
 
-      final double screenWidth = MediaQuery.of(context).size.width;
+      final double screenWidth = MediaQuery.sizeOf(context).width;
       final bool isLargeScreen = screenWidth >= kLargeScreenWidthBreakpoint;
 
       // Builds the row visual given the callback that should fire when the
@@ -4298,7 +4374,7 @@ class AppsPageState extends State<AppsPage> {
               // ── Source items ──────────────────────────────────────────────
               final sourceItems = [
                 MapEntry('', tr('none')),
-                ...sourceProvider.sources.map(
+                ...sourceProvider.sourceTemplates.map(
                   (e) => MapEntry(e.runtimeType.toString(), e.name),
                 ),
               ];
@@ -4395,7 +4471,7 @@ class AppsPageState extends State<AppsPage> {
                       }
                       final double calculatedMenuWidth = (maxW + 64.0).clamp(
                         120.0,
-                        MediaQuery.of(context).size.width - 88.0,
+                        MediaQuery.sizeOf(context).width - 88.0,
                       );
                       return FormField<String>(
                         key: ValueKey(filter.sourceFilter),
@@ -4822,6 +4898,12 @@ class AppsPageState extends State<AppsPage> {
       },
       child: () {
         final Widget listScaffold = Scaffold(
+          // Don't let the keyboard resize the body. A resize repaints the scene
+          // on every frame of the keyboard's slide animation, which forces the
+          // app bar's progressive blur (a BackdropFilter) to re-rasterize each
+          // frame — the keyboard-slide stutter. The search field is in the app
+          // bar, so it stays visible; the list just sits under the keyboard.
+          resizeToAvoidBottomInset: false,
           backgroundColor: Theme.of(context).colorScheme.surface,
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -5604,10 +5686,15 @@ class AppsPageState extends State<AppsPage> {
                                     effectiveSelectedAppId,
                                   ),
                                   onGenerateRoute: (RouteSettings settings) {
+                                    final bool openEdit = _openSelectedInEditMode;
+                                    if (_openSelectedInEditMode) {
+                                      _openSelectedInEditMode = false;
+                                    }
                                     return MaterialPageRoute(
                                       builder: (context) => AppPage(
                                         appId: effectiveSelectedAppId!,
                                         isEmbedded: true,
+                                        openInEditMode: openEdit,
                                       ),
                                     );
                                   },
@@ -5623,7 +5710,7 @@ class AppsPageState extends State<AppsPage> {
     );
   }
 
-  void openAppById(String appId) {
+  void openAppById(String appId, {bool autoScroll = true}) {
     AppsProvider appsProvider = context.read<AppsProvider>();
 
     AppInMemory? app = appsProvider.apps[appId];
@@ -5633,13 +5720,18 @@ class AppsPageState extends State<AppsPage> {
       return;
     }
 
-    final double screenWidth = MediaQuery.of(context).size.width;
+    final double screenWidth = MediaQuery.sizeOf(context).width;
     final bool isLargeScreen = screenWidth >= kLargeScreenWidthBreakpoint;
 
     if (isLargeScreen) {
       setState(() {
         selectedAppId = app.app.id;
       });
+      if (autoScroll) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          scrollToApp(appId);
+        });
+      }
     } else {
       Navigator.push(
         context,
@@ -5649,6 +5741,115 @@ class AppsPageState extends State<AppsPage> {
         ),
       );
     }
+  }
+
+  void scrollToApp(String appId) {
+    if (!scrollController.hasClients) return;
+
+    final sp = context.read<SettingsProvider>();
+    final groupBy = _effectiveGroupBy(sp);
+
+    int index = _listedAppsCache.indexWhere((sa) => sa.app.id == appId);
+    if (index == -1) return;
+
+    double offset = 120.0; // Base header height approximation
+    const double itemHeight = 84.0;
+    const double headerHeight = 48.0;
+
+    if (groupBy == AppsListGroupBy.none) {
+      // Flat list
+      final showUpdatesGroupSection = _effectiveGroupUpdatesSeparately(sp) &&
+          _updatesGroupListedIndices.isNotEmpty;
+      final pinUpdatesEnabled = _effectivePinUpdates(sp);
+      if (showUpdatesGroupSection) {
+        if (pinUpdatesEnabled) {
+          final isUpdatesCollapsed = _collapsedGroups.contains(
+            '${widget.folderId != null ? 'folder_${widget.folderId}_' : ''}__updates__',
+          );
+          offset += headerHeight;
+          if (!isUpdatesCollapsed) {
+            offset += _updatesGroupListedIndices.length * itemHeight;
+          }
+        }
+        final nonUpdatesIndices = [
+          for (int i = 0; i < _listedAppsCache.length; i++)
+            if (!_updatesGroupListedIndices.contains(i)) i,
+        ];
+        final flatIndex = nonUpdatesIndices.indexOf(index);
+        if (flatIndex != -1) {
+          offset += flatIndex * itemHeight;
+        }
+      } else {
+        offset += index * itemHeight;
+      }
+    } else if (groupBy == AppsListGroupBy.category) {
+      // Category group
+      for (final cat in _listedCategoriesCache) {
+        final categoryMapKey = cat ?? '__null__';
+        final indices = _categoryGroupListedIndices[categoryMapKey] ?? [];
+        if (indices.isEmpty) continue;
+        offset += headerHeight; // Group header
+        final catAppIndex = indices.indexOf(index);
+        if (catAppIndex != -1) {
+          offset += catAppIndex * itemHeight;
+          break;
+        } else {
+          final folderPrefix =
+              widget.folderId != null ? 'folder_${widget.folderId}_' : '';
+          final isCollapsed =
+              _collapsedGroups.contains('${folderPrefix}cat:$categoryMapKey');
+          if (!isCollapsed) {
+            offset += indices.length * itemHeight;
+          }
+        }
+      }
+    } else if (groupBy == AppsListGroupBy.source) {
+      // Source group
+      for (final src in _listedSourcesCache) {
+        final indices = _sourceGroupListedIndices[src] ?? [];
+        if (indices.isEmpty) continue;
+        offset += headerHeight; // Group header
+        final srcAppIndex = indices.indexOf(index);
+        if (srcAppIndex != -1) {
+          offset += srcAppIndex * itemHeight;
+          break;
+        } else {
+          final folderPrefix =
+              widget.folderId != null ? 'folder_${widget.folderId}_' : '';
+          final isCollapsed =
+              _collapsedGroups.contains('${folderPrefix}src:$src');
+          if (!isCollapsed) {
+            offset += indices.length * itemHeight;
+          }
+        }
+      }
+    } else if (groupBy == AppsListGroupBy.appType) {
+      // AppType group
+      for (final type in _listedAppTypesCache) {
+        final indices = _appTypeGroupListedIndices[type] ?? [];
+        if (indices.isEmpty) continue;
+        offset += headerHeight; // Group header
+        final typeAppIndex = indices.indexOf(index);
+        if (typeAppIndex != -1) {
+          offset += typeAppIndex * itemHeight;
+          break;
+        } else {
+          final folderPrefix =
+              widget.folderId != null ? 'folder_${widget.folderId}_' : '';
+          final isCollapsed =
+              _collapsedGroups.contains('${folderPrefix}appType:${type.name}');
+          if (!isCollapsed) {
+            offset += indices.length * itemHeight;
+          }
+        }
+      }
+    }
+
+    scrollController.animateTo(
+      offset.clamp(0.0, scrollController.position.maxScrollExtent),
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOutCubic,
+    );
   }
 
   // ── Folder helpers ──────────────────────────────────────────────────────────
@@ -6338,20 +6539,15 @@ class _TriStateCategoryFilterSelector extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            SegmentedButton<CategoryFilterMatchMode>(
-              showSelectedIcon: false,
-              style: SegmentedButton.styleFrom(
-                visualDensity: VisualDensity.compact,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-              ),
+            AppSegmentedButton<CategoryFilterMatchMode>(
               segments: [
                 ButtonSegment(
                   value: CategoryFilterMatchMode.any,
-                  label: Text(tr('categoryMatchAny')),
+                  label: AppSegmentedButtonLabel(tr('categoryMatchAny')),
                 ),
                 ButtonSegment(
                   value: CategoryFilterMatchMode.all,
-                  label: Text(tr('categoryMatchAll')),
+                  label: AppSegmentedButtonLabel(tr('categoryMatchAll')),
                 ),
               ],
               selected: {matchMode},

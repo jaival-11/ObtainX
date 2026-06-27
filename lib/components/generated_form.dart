@@ -1130,10 +1130,17 @@ class _GeneratedFormState extends State<GeneratedForm> {
                 key: formFieldKey,
                 autovalidateMode: AutovalidateMode.onUserInteraction,
                 onChanged: (value) {
-                  setState(() {
-                    values[formItem.key] = value;
-                    someValueChanged();
-                  });
+                  // No setState here: the field already shows the new text via
+                  // its own controller, and nothing else in this form renders
+                  // from a text field's value (switches/tag-inputs/subforms key
+                  // off their own values). someValueChanged() still runs the
+                  // form validator and notifies the parent of value+validity —
+                  // including per-field error display via _formKey.validate().
+                  // Previously every keystroke called setState, rebuilding the
+                  // entire form-input tree (all switches, tag inputs, subforms,
+                  // dropdowns) on each character.
+                  values[formItem.key] = value;
+                  someValueChanged();
                 },
                 decoration: baseDecoration.copyWith(
                   suffixIcon:

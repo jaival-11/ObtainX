@@ -754,7 +754,11 @@ class BulkAddWidgetState extends State<BulkAddWidget> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const SizedBox(height: 8),
+                  SizedBox(
+                    height: widget.isLargeScreen && !widget.standalone
+                        ? MediaQuery.paddingOf(context).top + 8
+                        : 8,
+                  ),
                   _buildAppTypeChipRow(),
                   const SizedBox(height: 8),
                   _buildStoreChipRow(),
@@ -1302,8 +1306,14 @@ class BulkAddWidgetState extends State<BulkAddWidget> {
   }
 
   Widget _buildScanningStep() {
+    final bool addTopPadding = widget.isLargeScreen && !widget.standalone;
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+      padding: EdgeInsets.fromLTRB(
+        24,
+        16 + (addTopPadding ? MediaQuery.paddingOf(context).top : 0),
+        24,
+        24,
+      ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1453,82 +1463,116 @@ class BulkAddWidgetState extends State<BulkAddWidget> {
     final bool showFabDone = _addingDone || newFound.isEmpty;
     final bool showProgress = _addingApps && _addingTotal > 0;
 
-    // Build all list items; banner goes first so it scrolls away naturally.
-    final List<Widget> listItems = [
-      _buildSummaryBanner(newFound, alreadyFoundTracked, cancelledCount),
+    // Build item *factories*, not widgets. The results step rebuilds on every
+    // setState (e.g. each add-progress tick), and with hundreds of found apps an
+    // eager List<Widget> reconstructed every tile + its badge column on each
+    // rebuild. Deferring to thunks lets ListView.builder build only the visible
+    // rows per frame. Banner goes first so it scrolls away naturally.
+    final bool addTopPadding = widget.isLargeScreen && !widget.standalone;
+    final List<Widget Function()> listItems = [
+      if (addTopPadding)
+        () => SizedBox(height: MediaQuery.paddingOf(context).top),
+      () => _buildSummaryBanner(newFound, alreadyFoundTracked, cancelledCount),
     ];
     if (_addingDone) {
       if (_addedApps.isNotEmpty) {
         listItems.add(
-          _buildSectionHeader(
+          () => _buildSectionHeader(
             '${tr('added')} (${_addedApps.length})',
             colorScheme.primary,
           ),
         );
         listItems.addAll(
-          _addedApps.map((a) => _buildFoundAppTile(a, addedResult: true)),
+          _addedApps.map(
+            (a) =>
+                () => _buildFoundAppTile(a, addedResult: true),
+          ),
         );
       }
       if (_failedApps.isNotEmpty) {
         listItems.add(
-          _buildSectionHeader(
+          () => _buildSectionHeader(
             '${tr('failed')} (${_failedApps.length})',
             colorScheme.error,
           ),
         );
         listItems.addAll(
-          _failedApps.map((a) => _buildFoundAppTile(a, failedResult: true)),
+          _failedApps.map(
+            (a) =>
+                () => _buildFoundAppTile(a, failedResult: true),
+          ),
         );
       }
       if (_notFoundApps.isNotEmpty) {
         listItems.add(
-          _buildSectionHeader(
+          () => _buildSectionHeader(
             '${tr('notFound')} (${_notFoundApps.length})',
             colorScheme.error,
           ),
         );
-        listItems.addAll(_notFoundApps.map(_buildNotFoundTile));
+        listItems.addAll(
+          _notFoundApps.map(
+            (a) =>
+                () => _buildNotFoundTile(a),
+          ),
+        );
       }
     } else {
       if (newFound.isNotEmpty) {
         listItems.add(
-          _buildSectionHeader(
+          () => _buildSectionHeader(
             '${tr('found')} (${newFound.length})',
             colorScheme.primary,
           ),
         );
         listItems.addAll(
-          newFound.map((a) => _buildFoundAppTile(a, selectable: true)),
+          newFound.map(
+            (a) =>
+                () => _buildFoundAppTile(a, selectable: true),
+          ),
         );
       }
       if (alreadyFoundTracked.isNotEmpty) {
         listItems.add(
-          _buildSectionHeader(
+          () => _buildSectionHeader(
             '${tr('alreadyTracked')} (${alreadyFoundTracked.length})',
             colorScheme.tertiary,
           ),
         );
         listItems.addAll(
-          alreadyFoundTracked.map((a) => _buildFoundAppTile(a, tracked: true)),
+          alreadyFoundTracked.map(
+            (a) =>
+                () => _buildFoundAppTile(a, tracked: true),
+          ),
         );
       }
       if (_notFoundApps.isNotEmpty) {
         listItems.add(
-          _buildSectionHeader(
+          () => _buildSectionHeader(
             '${tr('notFound')} (${_notFoundApps.length})',
             colorScheme.error,
           ),
         );
-        listItems.addAll(_notFoundApps.map(_buildNotFoundTile));
+        listItems.addAll(
+          _notFoundApps.map(
+            (a) =>
+                () => _buildNotFoundTile(a),
+          ),
+        );
       }
       if (_cancelledApps.isNotEmpty) {
         listItems.add(
-          _buildSectionHeader(
+          () => _buildSectionHeader(
             '${tr('bulkScanCancelled')} (${_cancelledApps.length})',
             colorScheme.onSurfaceVariant,
           ),
         );
-        listItems.addAll(_cancelledApps.map(_bulkAddCancelledResultRow));
+        listItems.addAll(
+          _cancelledApps.map(
+            (a) =>
+                () => _bulkAddCancelledResultRow(a),
+          ),
+        );
       }
     }
 
@@ -1597,8 +1641,12 @@ class BulkAddWidgetState extends State<BulkAddWidget> {
           _cancelledApps.isEmpty) {
         return Center(child: Text(tr('noAppsFound')));
       }
-      listItems.add(bottomActions);
-      return ListView(padding: EdgeInsets.zero, children: listItems);
+      listItems.add(() => bottomActions);
+      return ListView.builder(
+        padding: EdgeInsets.zero,
+        itemCount: listItems.length,
+        itemBuilder: (context, index) => listItems[index](),
+      );
     }
 
     return Stack(
@@ -1606,10 +1654,11 @@ class BulkAddWidgetState extends State<BulkAddWidget> {
         // Full-height scrollable list; banner is item 0 so it scrolls away.
         _foundApps.isEmpty && _notFoundApps.isEmpty && _cancelledApps.isEmpty
             ? Center(child: Text(tr('noAppsFound')))
-            : ListView(
+            : ListView.builder(
                 // Reserve space for the bottom FAB row.
                 padding: EdgeInsets.only(bottom: _bottomActionListPadding()),
-                children: listItems,
+                itemCount: listItems.length,
+                itemBuilder: (context, index) => listItems[index](),
               ),
 
         // Bottom row: progress pill (when active, expanding to the left of the

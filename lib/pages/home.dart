@@ -23,7 +23,7 @@ class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
   @override
-  State<HomePage> createState() => _HomePageState();
+  State<HomePage> createState() => HomePageState();
 }
 
 class NavigationPageItem {
@@ -34,7 +34,7 @@ class NavigationPageItem {
   NavigationPageItem(this.title, this.icon, this.widget);
 }
 
-class _HomePageState extends State<HomePage> {
+class HomePageState extends State<HomePage> {
   List<int> selectedIndexHistory = [];
   int pageSwitchRequestId = 0;
   int prevAppCount = -1;
@@ -69,29 +69,37 @@ class _HomePageState extends State<HomePage> {
     initDeepLinks();
   }
 
+  /// Waits for [key.currentState] to become non-null by checking once per
+  /// frame instead of busy-looping with microsecond delays.
+  Future<T> _waitForState<T extends State>(GlobalKey<T> key) {
+    if (key.currentState != null) return Future.value(key.currentState!);
+    final completer = Completer<T>();
+    void check(Duration _) {
+      if (key.currentState != null) {
+        completer.complete(key.currentState!);
+      } else {
+        WidgetsBinding.instance.addPostFrameCallback(check);
+      }
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback(check);
+    return completer.future;
+  }
+
+  Future<void> switchToAppsTabAndOpenApp(String appId) async {
+    await switchToPage(0);
+    final state = await _waitForState(
+      pages[0].widget.key as GlobalKey<AppsPageState>,
+    );
+    state.openAppById(appId);
+  }
+
   Future<void> initDeepLinks() async {
     _appLinks = AppLinks();
 
-    /// Waits for [key.currentState] to become non-null by checking once per
-    /// frame instead of busy-looping with microsecond delays.
-    Future<T> waitForState<T extends State>(GlobalKey<T> key) {
-      if (key.currentState != null) return Future.value(key.currentState!);
-      final completer = Completer<T>();
-      void check(Duration _) {
-        if (key.currentState != null) {
-          completer.complete(key.currentState!);
-        } else {
-          WidgetsBinding.instance.addPostFrameCallback(check);
-        }
-      }
-
-      WidgetsBinding.instance.addPostFrameCallback(check);
-      return completer.future;
-    }
-
     goToAddApp(String data) async {
       switchToPage(1);
-      final state = await waitForState(
+      final state = await _waitForState(
         pages[1].widget.key as GlobalKey<AddAppPageState>,
       );
       state.linkFn(data);
@@ -100,7 +108,7 @@ class _HomePageState extends State<HomePage> {
     goToExistingApp(String appId) async {
       // Go to Apps page
       switchToPage(0);
-      final state = await waitForState(
+      final state = await _waitForState(
         pages[0].widget.key as GlobalKey<AppsPageState>,
       );
       // Navigate to the app
@@ -374,7 +382,7 @@ class _HomePageState extends State<HomePage> {
         builder: (BuildContext context) {
           final ColorScheme scheme = Theme.of(context).colorScheme;
           final bool blurBottomNav = settingsProvider.progressiveBlurEnabled;
-          final double screenWidth = MediaQuery.of(context).size.width;
+          final double screenWidth = MediaQuery.sizeOf(context).width;
           final bool isLargeScreen = screenWidth >= kLargeScreenWidthBreakpoint;
 
           // Shared icon builder (adds the update-count badge to the first tab),
@@ -422,6 +430,20 @@ class _HomePageState extends State<HomePage> {
               : selectedIndexHistory.last;
 
           return Scaffold(
+            // Don't resize the shell for the keyboard. A resize relays-out and
+            // lifts the bottom nav bar every frame of the keyboard animation,
+            // and the nav bar's progressive blur (a BackdropFilter) re-rasterizes
+            // on each of those frames — that is the staggered nav-bar slide and
+            // the keyboard-slide stutter. With this off the nav bar stays put and
+            // the keyboard simply overlays it, so the blur is never re-rastered.
+            // Note this also stops the shell consuming the bottom inset, so it
+            // reaches the nested Apps/Add-App Scaffolds — they are deliberately
+            // resizeToAvoidBottomInset:false too, because extendBody draws their
+            // bodies behind this blurred nav bar and a per-frame body relayout
+            // would re-raster the blur and bring the stutter back. Trade-off:
+            // the keyboard overlays bottom content rather than pushing it up
+            // (the search/URL fields are top-anchored, so they stay visible).
+            resizeToAvoidBottomInset: false,
             backgroundColor: scheme.surface,
             extendBody: blurBottomNav && !isLargeScreen,
             body: isLargeScreen

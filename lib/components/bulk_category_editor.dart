@@ -242,11 +242,33 @@ class _BulkCategoryEditorSheetState extends State<BulkCategoryEditorSheet> {
     super.dispose();
   }
 
-  List<BulkCategoryCoverage> get _coverage => buildBulkCategoryCoverage(
-    availableCategoryColors: widget.availableCategoryColors,
-    selectedAppCategories: widget.selectedAppCategories,
-    extraCategories: _extraAddedCategories,
-  );
+  @override
+  void didUpdateWidget(BulkCategoryEditorSheet oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(
+          oldWidget.availableCategoryColors,
+          widget.availableCategoryColors,
+        ) ||
+        !identical(
+          oldWidget.selectedAppCategories,
+          widget.selectedAppCategories,
+        )) {
+      _coverageCache = null;
+    }
+  }
+
+  // Coverage is an O(apps × categories) scan plus a sort. It depends only on the
+  // widget's category/app inputs and _extraAddedCategories — NOT on the text
+  // field or chip intents — so cache it instead of recomputing on every
+  // setState (the new-category name field rebuilds on each keystroke just to
+  // toggle its Add button). Invalidated in _stageNewCategory and didUpdateWidget.
+  List<BulkCategoryCoverage>? _coverageCache;
+  List<BulkCategoryCoverage> get _coverage =>
+      _coverageCache ??= buildBulkCategoryCoverage(
+        availableCategoryColors: widget.availableCategoryColors,
+        selectedAppCategories: widget.selectedAppCategories,
+        extraCategories: _extraAddedCategories,
+      );
 
   BulkCategoryIntentActions get _pendingActions =>
       resolveBulkCategoryIntentActions(
@@ -287,6 +309,7 @@ class _BulkCategoryEditorSheetState extends State<BulkCategoryEditorSheet> {
       if (existingCoverage.isEmpty) {
         _extraAddedCategories.add(category);
         _newCategoryColorsByKey[key] = _newCategoryColor.toARGB32();
+        _coverageCache = null; // _extraAddedCategories changed → recompute.
       }
       _categoryIntents[key] = BulkCategoryIntent.add;
       _newCategoryNameController.clear();

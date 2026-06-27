@@ -1695,6 +1695,7 @@ class AppsProvider with ChangeNotifier {
     );
     _pendingUpdateCountDirty = true;
     notifyListeners();
+    unawaited(updateAppIcon(packageName));
   }
 
   Future<File> handleAPKIDChange(
@@ -4121,6 +4122,24 @@ class AppsProvider with ChangeNotifier {
         notifyListeners();
       }
     }
+    // For a multi-app save with no caller-supplied snapshot, enumerate device
+    // packages ONCE here. Otherwise each app's getInstalledInfo() re-enumerates
+    // every installed package — O(apps × devicePackages) of platform-thread
+    // work that blocks touch dispatch. Mirrors the prefetch in checkUpdates;
+    // the map carries current device versions, so external-update detection is
+    // preserved. Skipped for single-app saves (one enumeration either way).
+    Map<String, PackageInfo>? effectivePrefetch = prefetchedInstalledInfo;
+    if (effectivePrefetch == null && updateInstalledInfo && apps.length > 1) {
+      try {
+        final List<PackageInfo> all = await getAllInstalledInfo(light: true);
+        effectivePrefetch = {
+          for (final info in all)
+            if (info.packageName != null) info.packageName!: info,
+        };
+      } catch (e) {
+        logs.add('Failed to prefetch installed info for bulk save: $e');
+      }
+    }
     await Future.wait(
       apps.map((appToSave) async {
         var app = appToSave.deepCopy();
@@ -4140,8 +4159,8 @@ class AppsProvider with ChangeNotifier {
             app.name = cachedInMemory.app.name;
           }
         } else {
-          info = prefetchedInstalledInfo != null
-              ? prefetchedInstalledInfo[app.id]
+          info = effectivePrefetch != null
+              ? effectivePrefetch[app.id]
               : await getInstalledInfo(app.id);
           // Reuse the cached icon whenever the installed package
           // hasn't changed since the last save. [getAppIcon] returns large PNG
@@ -4150,6 +4169,7 @@ class AppsProvider with ChangeNotifier {
           // uninstalls / updates.
           final bool installedUnchanged =
               cachedInMemory != null &&
+              cachedInMemory.icon != null &&
               cachedInMemory.installedInfo?.packageName == info?.packageName &&
               cachedInMemory.installedInfo?.versionName == info?.versionName &&
               cachedInMemory.installedInfo?.versionCode == info?.versionCode;
@@ -4160,6 +4180,10 @@ class AppsProvider with ChangeNotifier {
               // getAppIcon() is a JNI hop that throws NameNotFoundException if
               // the package vanished between getInstalledInfo() and here.
               icon = await info?.applicationInfo?.getAppIcon();
+              if (icon != null) {
+                icon = await _resizeIconForCache(icon);
+                await File('${iconsCacheDir.path}/${app.id}.png').writeAsBytes(icon);
+              }
             } catch (e) {
               logs.add('App icon unavailable while saving ${app.id}: $e');
               icon = null;
@@ -4170,8 +4194,8 @@ class AppsProvider with ChangeNotifier {
                   await BulkImportService.getApplicationLabels([app.id]);
               localizedLabel = labelsByPackageName[app.id]?.trim();
               if (localizedLabel?.isNotEmpty != true) {
-                info = prefetchedInstalledInfo != null
-                    ? prefetchedInstalledInfo[app.id]
+                info = effectivePrefetch != null
+                    ? effectivePrefetch[app.id]
                     : await getInstalledInfo(app.id);
               }
             }

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:obtainium/components/theme_accent_settings_section.dart'
     show buildThemeAccentSettingsCardItems;
 import 'package:obtainium/providers/settings_provider.dart';
+import 'package:obtainium/theme/app_segmented_button_theme.dart';
 import 'package:obtainium/widgets/help_hint_icon.dart';
 import 'package:provider/provider.dart';
 
@@ -78,45 +79,37 @@ List<Widget> buildThemesSettingsCardItems(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       child: SizedBox(
         width: double.infinity,
-        child: SegmentedButton<_ThemeBrightnessSegment>(
+        child: AppSegmentedButton<_ThemeBrightnessSegment>(
           segments: [
             ButtonSegment<_ThemeBrightnessSegment>(
               value: _ThemeBrightnessSegment.system,
-              label: Text(
+              label: AppSegmentedButtonLabel(
                 tr('followSystem'),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 11.5),
+                fontSize: 11.5,
               ),
               icon: const Icon(Icons.brightness_auto_outlined, size: 18),
             ),
             ButtonSegment<_ThemeBrightnessSegment>(
               value: _ThemeBrightnessSegment.light,
-              label: Text(
+              label: AppSegmentedButtonLabel(
                 tr('light'),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 11.5),
+                fontSize: 11.5,
               ),
               icon: const Icon(Icons.light_mode_outlined, size: 18),
             ),
             ButtonSegment<_ThemeBrightnessSegment>(
               value: _ThemeBrightnessSegment.dark,
-              label: Text(
+              label: AppSegmentedButtonLabel(
                 tr('dark'),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 11.5),
+                fontSize: 11.5,
               ),
               icon: const Icon(Icons.dark_mode_outlined, size: 18),
             ),
             ButtonSegment<_ThemeBrightnessSegment>(
               value: _ThemeBrightnessSegment.black,
-              label: Text(
+              label: AppSegmentedButtonLabel(
                 tr('settingsThemeBlackShort'),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 11.5),
+                fontSize: 11.5,
               ),
               icon: const Icon(Icons.square_outlined, size: 18),
             ),
@@ -126,7 +119,6 @@ List<Widget> buildThemesSettingsCardItems(
             if (selected.isEmpty) return;
             _applyThemeSegment(settings, selected.first);
           },
-          showSelectedIcon: false,
           style: SegmentedButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
             visualDensity: VisualDensity.standard,

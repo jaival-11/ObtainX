@@ -247,7 +247,12 @@ int appPageAppsRebuildToken(AppsProvider provider, String appId) {
   return Object.hashAll([
     downloadsRunning,
     appId,
-    inMemory.downloadProgress,
+    // Only whether a download is active (start/stop) — NOT the live fraction.
+    // The fraction ticks ~4 Hz during a download; including it here forced the
+    // entire ~2700-line AppPage build to re-run on every tick. The live bar is
+    // now rendered by [_DownloadProgressAction], which subscribes to the
+    // fraction itself, so the page only rebuilds when the download begins/ends.
+    inMemory.downloadProgress != null,
     identityHashCode(inMemory.icon),
     inMemory.icon?.length,
     model.id,
@@ -286,8 +291,102 @@ int appPageSettingsRebuildToken(SettingsProvider settings) {
     settings.checkUpdateOnDetailPage,
     settings.highlightTouchTargets,
     settings.cardCornerScale,
-    settings.categories.hashCode,
+    Object.hashAll(settings.categories.entries.map((e) => '${e.key}=${e.value}')),
   );
+}
+
+/// The download/install progress button shown in the app action area.
+///
+/// Subscribes narrowly to its own app's [AppInMemory.downloadProgress] and
+/// [AppInMemory.downloadTotalBytes] via [context.select], so the ~4 Hz progress
+/// ticks rebuild only this small widget — not the whole ~2700-line [AppPage]
+/// build. The page-level rebuild token ([appPageAppsRebuildToken]) tracks only
+/// whether a download is active, so the page rebuilds once on start and once on
+/// finish; everything in between is this widget repainting alone.
+class _DownloadProgressAction extends StatelessWidget {
+  const _DownloadProgressAction({
+    required this.appId,
+    required this.actionTheme,
+    required this.expressiveRadius,
+  });
+
+  final String appId;
+  final ThemeData actionTheme;
+  final double expressiveRadius;
+
+  @override
+  Widget build(BuildContext context) {
+    final (double? dpOrNull, int? totalBytes) = context
+        .select<AppsProvider, (double?, int?)>((p) {
+          final a = p.apps[appId];
+          return (a?.downloadProgress, a?.downloadTotalBytes);
+        });
+    // Race guard: the download may have ended between the page rebuild that
+    // mounted this widget and this build. The page will rebuild and remove us.
+    if (dpOrNull == null) {
+      return const SizedBox.shrink();
+    }
+    final double dp = dpOrNull;
+    final bool isInstalling = dp < 0;
+    final String bytesLabel = !isInstalling && totalBytes != null
+        ? ' · ${formatBytesForDisplay((dp / 100 * totalBytes).round())} / ${formatBytesForDisplay(totalBytes)}'
+        : '';
+    final String label = isInstalling
+        ? '${tr('installing')}…'
+        : tr('downloadingX', args: ['${dp.round()}%$bytesLabel']);
+    final Widget progressBar = ClipRRect(
+      borderRadius: BorderRadius.circular(expressiveRadius),
+      child: SizedBox(
+        height: 52,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Container(color: actionTheme.colorScheme.onSurface.withAlpha(31)),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FractionallySizedBox(
+                widthFactor: isInstalling ? 1.0 : dp / 100,
+                child: Container(
+                  color: actionTheme.colorScheme.primary.withAlpha(
+                    isInstalling ? 55 : 220,
+                  ),
+                ),
+              ),
+            ),
+            if (isInstalling)
+              LinearProgressIndicator(
+                backgroundColor: Colors.transparent,
+                color: actionTheme.colorScheme.primary.withAlpha(120),
+              ),
+            Center(
+              child: Text(
+                label,
+                style: actionTheme.textTheme.labelLarge?.copyWith(
+                  color: actionTheme.colorScheme.onSurface.withAlpha(200),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        progressBar,
+        if (!isInstalling)
+          Center(
+            child: TextButton(
+              onPressed: () =>
+                  context.read<AppsProvider>().cancelDownload(appId),
+              child: Text(tr('cancel')),
+            ),
+          ),
+      ],
+    );
+  }
 }
 
 enum _UnsavedAction { keepEditing, discard, saveAndExit }
@@ -353,6 +452,13 @@ class _AppPageState extends State<AppPage> {
   String? _iconSchemeFailedCacheKey;
 
   final SourceProvider _sourceProvider = SourceProvider();
+
+  // Cache for the resolved AppSource. getSource() constructs a fresh source
+  // (running tr() in its constructor) on every call, but the result is a pure
+  // function of the app's url + overrideSource, which rarely change for an open
+  // page — so recompute only when that key changes instead of every build.
+  AppSource? _cachedSource;
+  String? _cachedSourceKey;
 
   /// Resolves to this app's store-availability map from [BulkScanCache], or null.
   Future<Map<String, String>?>? _storeAvailabilityCacheFuture;
@@ -560,6 +666,9 @@ class _AppPageState extends State<AppPage> {
   void _exitEditWithoutSaving() {
     _clearEditIconStaging();
     setState(() => _editMode = false);
+    if (_appPageScrollController.hasClients) {
+      _appPageScrollController.jumpTo(0);
+    }
   }
 
   // --- Unsaved changes dialog ---
@@ -768,6 +877,9 @@ class _AppPageState extends State<AppPage> {
     if (mounted) {
       _clearEditIconStaging();
       setState(() => _editMode = false);
+      if (_appPageScrollController.hasClients) {
+        _appPageScrollController.jumpTo(0);
+      }
     }
   }
 
@@ -1869,12 +1981,18 @@ class _AppPageState extends State<AppPage> {
         }
       });
     }
-    var source = app != null
-        ? _sourceProvider.getSource(
-            app.app.url,
-            overrideSource: app.app.overrideSource,
-          )
-        : null;
+    AppSource? source;
+    if (app != null) {
+      final String sourceKey = '${app.app.url} ${app.app.overrideSource ?? ''}';
+      if (sourceKey != _cachedSourceKey) {
+        _cachedSource = _sourceProvider.getSource(
+          app.app.url,
+          overrideSource: app.app.overrideSource,
+        );
+        _cachedSourceKey = sourceKey;
+      }
+      source = _cachedSource;
+    }
     final String? buildVerificationPersistentPageError =
         app != null &&
             source != null &&
@@ -3674,69 +3792,15 @@ class _AppPageState extends State<AppPage> {
       final String markInstalledLabel = sizeAnnotated(tr('markInstalled'));
       final String markUpdatedLabel = sizeAnnotated(tr('markUpdated'));
 
-      // #2 — inline progress button replaces the action button while downloading/installing.
+      // #2 — inline progress button replaces the action button while
+      // downloading/installing. The live bar is its own widget so the ~4 Hz
+      // progress ticks don't rebuild the whole page (see [_DownloadProgressAction]
+      // and the note in [appPageAppsRebuildToken]).
       if (app?.downloadProgress != null) {
-        final double dp = app!.downloadProgress!;
-        final bool isInstalling = dp < 0;
-        final int? totalBytes = app.downloadTotalBytes;
-        final String bytesLabel = !isInstalling && totalBytes != null
-            ? ' · ${formatBytesForDisplay((dp / 100 * totalBytes).round())} / ${formatBytesForDisplay(totalBytes)}'
-            : '';
-        final String label = isInstalling
-            ? '${tr('installing')}…'
-            : tr('downloadingX', args: ['${dp.round()}%$bytesLabel']);
-        final Widget progressBar = ClipRRect(
-          borderRadius: BorderRadius.circular(expressiveRadius),
-          child: SizedBox(
-            height: 52,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                Container(
-                  color: actionTheme.colorScheme.onSurface.withAlpha(31),
-                ),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: FractionallySizedBox(
-                    widthFactor: isInstalling ? 1.0 : dp / 100,
-                    child: Container(
-                      color: actionTheme.colorScheme.primary.withAlpha(
-                        isInstalling ? 55 : 220,
-                      ),
-                    ),
-                  ),
-                ),
-                if (isInstalling)
-                  LinearProgressIndicator(
-                    backgroundColor: Colors.transparent,
-                    color: actionTheme.colorScheme.primary.withAlpha(120),
-                  ),
-                Center(
-                  child: Text(
-                    label,
-                    style: actionTheme.textTheme.labelLarge?.copyWith(
-                      color: actionTheme.colorScheme.onSurface.withAlpha(200),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            progressBar,
-            if (!isInstalling)
-              Center(
-                child: TextButton(
-                  onPressed: () => appsProvider.cancelDownload(app.app.id),
-                  child: Text(tr('cancel')),
-                ),
-              ),
-          ],
+        return _DownloadProgressAction(
+          appId: app!.app.id,
+          actionTheme: actionTheme,
+          expressiveRadius: expressiveRadius,
         );
       }
 
@@ -4048,7 +4112,7 @@ class _AppPageState extends State<AppPage> {
           MediaQuery.systemGestureInsetsOf(themeContext).bottom > 0;
       final bool isLandscapeEmbedded =
           widget.isEmbedded &&
-          MediaQuery.of(themeContext).orientation == Orientation.landscape;
+          MediaQuery.orientationOf(themeContext) == Orientation.landscape;
       Widget actionBarContent = Padding(
         padding: isLandscapeEmbedded
             ? const EdgeInsets.fromLTRB(16, 6, 16, 6)
@@ -4571,6 +4635,7 @@ class _AppPageState extends State<AppPage> {
               ),
               bottomNavigationBar: widget.isEmbedded
                   ? _ScrollLinkedAppPageFooter(
+                      key: ValueKey<bool>(_editMode),
                       scrollController: _appPageScrollController,
                       child: _MeasureSize(
                         onChange: _handleBottomActionBarSizeChanged,
@@ -4591,6 +4656,7 @@ class _AppPageState extends State<AppPage> {
 
 class _ScrollLinkedAppPageFooter extends StatefulWidget {
   const _ScrollLinkedAppPageFooter({
+    super.key,
     required this.scrollController,
     required this.child,
   });
