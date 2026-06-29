@@ -105,12 +105,15 @@ class SettingsPageState extends State<SettingsPage> {
 
   static const List<String> _settingsSectionKeys = [
     'updates',
+    'virustotal',
+    'virustotal',
     'sourceSpecific',
     'themes',
     'appearance',
     'warnings',
     'interaction',
     'categories',
+    'virustotal',
   ];
 
   static const List<int> updateIntervalNodes = [
@@ -214,6 +217,7 @@ class SettingsPageState extends State<SettingsPage> {
 
     final List<String> visibleSettingsSectionKeys = [
       'updates',
+      'virustotal',
       if (sourceProvider.sourceTemplates.any(
         (source) => source.sourceConfigSettingFormItems.isNotEmpty,
       ))
@@ -223,6 +227,7 @@ class SettingsPageState extends State<SettingsPage> {
       'warnings',
       'interaction',
       'categories',
+      'virustotal',
     ];
     // Each section is wrapped in a RepaintBoundary so it composites to its own
     // cached layer. The settings body is one eager Column inside a single
@@ -451,6 +456,12 @@ class SettingsPageState extends State<SettingsPage> {
         icon: Icons.update_rounded,
         widget: _UpdatesSection(cs: cs, androidInfo: _androidInfo),
       ),
+    _SettingsCategory(
+      key: 'virustotal',
+      title: 'VirusTotal',
+      icon: Icons.security_rounded,
+      widget: const _VirusTotalSection(),
+    ),
       if (sourceProvider.sourceTemplates.any(
         (s) => s.sourceConfigSettingFormItems.isNotEmpty,
       ))
@@ -808,6 +819,15 @@ class SettingsPageState extends State<SettingsPage> {
                                 cs: cs,
                                 androidInfo: _androidInfo,
                               ),
+                            ),
+                            sectionHeader(
+                              'VirusTotal',
+                              Icons.security_rounded,
+                              'virustotal',
+                            ),
+                            collapsibleCard(
+                              'virustotal',
+                              const _VirusTotalSection(),
                             ),
                             // ── Source-specific ───────────────────────────
                             if (sourceProvider.sourceTemplates.any(
@@ -3368,6 +3388,62 @@ class _GappedTrackShape extends SliderTrackShape with BaseSliderTrackShape {
         bottomRight: const Radius.circular(_radius),
       ),
       inactivePaint,
+    );
+  }
+}
+
+
+class _VirusTotalSection extends StatefulWidget {
+  const _VirusTotalSection();
+  @override
+  State<_VirusTotalSection> createState() => _VirusTotalSectionState();
+}
+
+class _VirusTotalSectionState extends State<_VirusTotalSection> {
+  bool _obscured = true;
+
+  @override
+  Widget build(BuildContext context) {
+    final SettingsProvider sp = context.watch<SettingsProvider>();
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: TextFormField(
+              initialValue: sp.vtApiKey,
+              obscureText: _obscured,
+              decoration: InputDecoration(
+                labelText: "VirusTotal API Key (Secret)",
+                hintText: "Enter 64-character API key",
+                border: const OutlineInputBorder(),
+                suffixIcon: IconButton(
+                  icon: Icon(_obscured ? Icons.visibility : Icons.visibility_off),
+                  onPressed: () => setState(() => _obscured = !_obscured),
+                ),
+              ),
+              onChanged: (val) => sp.vtApiKey = val.trim(),
+            ),
+          ),
+          ListTile(
+            title: const Text("Scan Mode"),
+            subtitle: const Text("Choose which APKs get verified before install"),
+            trailing: DropdownButton<String>(
+              value: sp.vtScanMode,
+              underline: const SizedBox(),
+              onChanged: (String? val) {
+                if (val != null) sp.vtScanMode = val;
+              },
+              items: const [
+                DropdownMenuItem(value: "all", child: Text("All apps")),
+                DropdownMenuItem(value: "selected", child: Text("Selected")),
+                DropdownMenuItem(value: "none", child: Text("None")),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

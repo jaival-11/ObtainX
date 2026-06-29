@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../components/generated_form.dart';
 import 'dart:async';
 
 import 'package:app_links/app_links.dart';
@@ -34,7 +37,7 @@ class NavigationPageItem {
   NavigationPageItem(this.title, this.icon, this.widget);
 }
 
-class HomePageState extends State<HomePage> {
+class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   List<int> selectedIndexHistory = [];
   int pageSwitchRequestId = 0;
   int prevAppCount = -1;
@@ -69,6 +72,8 @@ class HomePageState extends State<HomePage> {
 
   @override
   void initState() {
+    WidgetsBinding.instance.addObserver(this);
+    _checkVTIncident();
     super.initState();
     initDeepLinks();
   }
@@ -555,8 +560,87 @@ class HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _linkSubscription?.cancel();
     _sharedUrlReceiver.dispose();
     super.dispose();
   }
-}
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _checkVTIncident();
+  }
+
+  Future<void> _checkVTIncident() async {
+    final prefs = await SharedPreferences.getInstance();
+    final incident = prefs.getString('vt_incident_unread');
+    if (incident != null && incident.isNotEmpty) {
+      await prefs.remove('vt_incident_unread');
+      final data = jsonDecode(incident);
+      final detections = Map<String, dynamic>.from(data['detections'] ?? {});
+
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text("VirusTotal"),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(data['summary'] ?? "", style: const TextStyle(fontSize: 14)),
+                if (detections.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Text("Flagged Threats:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  const SizedBox(height: 4),
+                  ...detections.entries.map((e) => Card(
+                    margin: const EdgeInsets.symmetric(vertical: 4),
+                    child: ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.warning_amber_rounded, color: Colors.redAccent),
+                      title: Text(e.key, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      subtitle: Text(e.value.toString(), style: const TextStyle(fontSize: 12)),
+                    ),
+                  )),
+                ]
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("OK"),
+            ),
+            TextButton(
+              style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+              onPressed: () {
+                Navigator.pop(ctx);
+                showDialog(
+                  context: context,
+                  builder: (confirmCtx) => AlertDialog(
+                    title: const Text("Are you sure?"),
+                    content: const Text("Are you sure you want to proceed with installation?"),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(confirmCtx), child: const Text("Cancel")),
+                      TextButton(
+                        style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+                        onPressed: () async {
+                          Navigator.pop(confirmCtx);
+                          await context.read<AppsProvider>().retryBlockedVtInstall(data['appName'], context);
+                        },
+                        child: const Text("Install Anyway", style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                );
+              },
+              child: const Text("Install Anyway"),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  }

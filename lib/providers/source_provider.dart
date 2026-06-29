@@ -1,3 +1,4 @@
+import 'settings_provider.dart';
 // Defines App sources and provides functions used to interact with them
 // AppSource is an abstract class with a concrete implementation for each source
 
@@ -1055,6 +1056,14 @@ abstract class AppSource {
   List<List<GeneratedFormItem>>
   additionalAppSpecificSourceAgnosticSettingFormItemsNeverUseDirectly = [
     [
+      GeneratedFormSwitch(
+        'scanWithVirusTotal',
+        label: 'Scan with VirusTotal',
+        defaultValue: SettingsProvider().vtScanMode == 'all',
+        disabled: SettingsProvider().vtScanMode != 'selected',
+      ),
+    ],
+    [
       GeneratedFormSectionHeader(
         '__formSectionTracking',
         label: tr('additionalOptionsSectionTracking'),
@@ -1087,6 +1096,7 @@ abstract class AppSource {
         label: tr('skipUpdateNotifications'),
       ),
     ],
+
     [
       GeneratedFormSectionHeader(
         '__formSectionVersion',

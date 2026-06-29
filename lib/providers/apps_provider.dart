@@ -1,6 +1,8 @@
 // Manages state related to the list of Apps tracked by Obtainium,
 // Exposes related functions such as those used to add, remove, download, and install Apps.
 
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:obtainium/services/vt_interceptor.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:isolate';
@@ -2459,7 +2461,20 @@ class AppsProvider with ChangeNotifier {
     }
   }
 
-  Future<bool> installApk(
+    Future<void> retryBlockedVtInstall(String appId, BuildContext? ctx) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final qPath = prefs.getString("vt_q_" + appId);
+      if (qPath != null && File(qPath).existsSync()) {
+        VTInterceptor.oneTimeBypassList.add(appId);
+        await installApk(DownloadedApk(appId, File(qPath)), ctx);
+        try { File(qPath).deleteSync(); } catch (_) {}
+        await prefs.remove("vt_q_" + appId);
+      }
+    } catch (e) { print("VT Retry Error: " + e.toString()); }
+  }
+
+Future<bool> installApk(
     DownloadedApk file,
     BuildContext? firstTimeWithContext, {
     bool needsBGWorkaround = false,
@@ -2475,6 +2490,10 @@ class AppsProvider with ChangeNotifier {
     /// as when opening the file from a file manager.
     String? thirdPartyHandoffContainerPath,
   }) async {
+    if (!await VTInterceptor.shouldAllowInstall(file.appId, file.file.path, apps.values.map((e) => e.app).toList())) {
+      return false;
+    }
+
     final bool saveApkCopiesRequested =
         settingsProvider.saveDownloadedApkCopies &&
         !skipApkSaveFolderPersistForPrimaryApk;

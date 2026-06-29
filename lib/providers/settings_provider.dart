@@ -85,6 +85,14 @@ class SettingsProvider with ChangeNotifier {
   bool justStarted = true;
   bool isTV = false;
 
+  // VirusTotal Settings
+  String get vtApiKey => prefs?.getString('vtApiKey-creds') ?? '';
+  set vtApiKey(String value) => setSettingString('vtApiKey-creds', value);
+
+  String get vtScanMode => prefs?.getString('vtScanMode') ?? 'none';
+  set vtScanMode(String value) => setSettingString('vtScanMode', value); // 'all', 'selected', 'none'
+
+
   static const Duration _storageAccessWarningCooldown = Duration(minutes: 5);
   DateTime? _lastExportDirAccessWarningAt;
   DateTime? _lastApkSaveDirAccessWarningAt;
@@ -110,6 +118,10 @@ class SettingsProvider with ChangeNotifier {
   // Not done in constructor as we want to be able to await it
   Future<void> initializeSettings() async {
     prefs = await SharedPreferences.getInstance();
+    if (prefs?.containsKey('vtApiKey') == true) {
+      prefs?.setString('vtApiKey-creds', prefs?.getString('vtApiKey') ?? '');
+      prefs?.remove('vtApiKey');
+    }
     _categoriesMemory = null;
     _appFoldersMemory = null;
     _folderViewCache.clear();

@@ -1,3 +1,4 @@
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:android_system_font/android_system_font.dart';
@@ -212,5 +213,22 @@ class NativeFeatures {
     } on MissingPluginException {
       // Non-Android builds and older runners do not provide this channel.
     }
+  }
+
+  static Future<void> triggerVTAlert(String appName) async {
+    final flnp = FlutterLocalNotificationsPlugin();
+    const androidDetails = AndroidNotificationDetails(
+      'obtainium_vt_channel',
+      'VirusTotal Security Alerts',
+      channelDescription: 'Alerts for blocked APK installations',
+      importance: Importance.max,
+      priority: Priority.high,
+    );
+    await flnp.show(
+      id: 991199,
+      title: 'ObtainX Security Alert',
+      body: 'Installation blocked: ' + appName + ' failed VirusTotal verification. Tap report.',
+      notificationDetails: const NotificationDetails(android: androidDetails),
+    );
   }
 }
