@@ -1,3 +1,5 @@
+import 'package:easy_localization/easy_localization.dart';
+import 'package:obtainium/providers/notifications_provider.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'dart:async';
 import 'dart:io';
@@ -216,19 +218,14 @@ class NativeFeatures {
   }
 
   static Future<void> triggerVTAlert(String appName) async {
-    final flnp = FlutterLocalNotificationsPlugin();
-    const androidDetails = AndroidNotificationDetails(
-      'obtainium_vt_channel',
+    await NotificationsProvider().notify(ObtainiumNotification(
+      991199,
+      tr('vtSecurityAlertTitle'),
+      tr('vtSecurityAlertBody', args: [appName]),
+      'vt_alerts',
       'VirusTotal Security Alerts',
-      channelDescription: 'Alerts for blocked APK installations',
-      importance: Importance.max,
-      priority: Priority.high,
-    );
-    await flnp.show(
-      id: 991199,
-      title: 'ObtainX Security Alert',
-      body: 'Installation blocked: ' + appName + ' failed VirusTotal verification. Tap report.',
-      notificationDetails: const NotificationDetails(android: androidDetails),
-    );
+      'Alerts for blocked APK installations',
+      Importance.max,
+    ));
   }
 }

@@ -786,5 +786,7 @@
   "gitlabPATValidationRateLimited": "Could not validate GitLab PAT because GitLab rate-limited the request",
   "discardUnsavedPATChangesExplanation": "You have unsaved Personal Access Token changes. If you switch tabs, these changes will be discarded. Continue?",
   "saved": "Saved",
-  "bulkScanDiscardResultsBody": "You have unsaved scan results. Leaving this page will discard the results. Continue?"
+  "bulkScanDiscardResultsBody": "You have unsaved scan results. Leaving this page will discard the results. Continue?",
+  "vtSecurityAlertTitle": "Security Alert",
+  "vtSecurityAlertBody": "Installation blocked: {} failed VirusTotal verification. Tap report."
 }
