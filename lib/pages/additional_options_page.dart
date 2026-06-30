@@ -216,29 +216,21 @@ class _AdditionalOptionsPageState extends State<AdditionalOptionsPage> {
     );
     _items = cloneFormItems(source.combinedAppSpecificSettingFormItems);
     for (final List<GeneratedFormItem> row in _items) {
-      for (final GeneratedFormItem el in row) {
-        if (el.key == 'scanWithVirusTotal' && el is GeneratedFormSwitch) {
-          final mode = settingsProvider.vtScanMode;
-          if (mode == 'all') {
-            el.defaultValue = true;
-            el.disabled = true;
-          } else if (mode == 'none') {
-            el.defaultValue = false;
-            el.disabled = true;
-          } else {
-            el.disabled = false;
-          }
-        }
-      }
       for (final GeneratedFormItem element in row) {
         if (appAdditionalSettings[element.key] != null) {
           element.defaultValue = appAdditionalSettings[element.key];
+        }
         if (element.key == 'scanWithVirusTotal' && element is GeneratedFormSwitch) {
           final mode = settingsProvider.vtScanMode;
-          if (mode == 'all') { element.defaultValue = true; element.disabled = true; }
-          else if (mode == 'none') { element.defaultValue = false; element.disabled = true; }
-          else { element.disabled = false; }
-        }
+          if (mode == 'all') {
+            element.defaultValue = true;
+            element.disabled = true;
+          } else if (mode == 'none') {
+            element.defaultValue = false;
+            element.disabled = true;
+          } else {
+            element.disabled = false;
+          }
         }
         if (source is GitHub &&
             element is GeneratedFormDropdown &&
