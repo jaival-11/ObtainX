@@ -47,8 +47,8 @@ class VirusTotalService {
 
     try {
       // ─── TIER 1: FAST HASH LOOKUP (0.4 SECONDS) ───────────────────────
-      final bytes = await file.readAsBytes();
-      final fileHash = sha256.convert(bytes).toString();
+      final stream = file.openRead();
+      final fileHash = (await sha256.bind(stream).first).toString();
 
       final headers = {'x-apikey': apiKey.trim()};
       final hashUrl = Uri.parse('$_baseUrl/files/$fileHash');
