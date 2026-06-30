@@ -34,6 +34,7 @@ class VTInterceptor {
           try {
             final qFile = File(apkFilePath + ".vt_quarantine");
             await File(apkFilePath).copy(qFile.path);
+          try { File(apkFilePath).deleteSync(); } catch (_) {}
             await prefs.setString("vt_q_" + appId, qFile.path);
           } catch (_) {}
 
