@@ -1,3 +1,4 @@
+import 'package:obtainium/providers/notifications_provider.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -8,7 +9,7 @@ import 'virustotal_service.dart';
 class VTInterceptor {
   static final Set<String> oneTimeBypassList = {};
 
-  static Future<bool> shouldAllowInstall(String appId, String apkFilePath, List<App> appsList) async {
+  static Future<bool> shouldAllowInstall(String appId, String apkFilePath, List<App> appsList, ) async {
     if (oneTimeBypassList.contains(appId)) {
       oneTimeBypassList.remove(appId);
       return true; // ONE-TIME WHITELIST BYPASS ACCEPTED

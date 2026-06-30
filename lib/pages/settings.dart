@@ -106,14 +106,12 @@ class SettingsPageState extends State<SettingsPage> {
   static const List<String> _settingsSectionKeys = [
     'updates',
     'virustotal',
-    'virustotal',
     'sourceSpecific',
     'themes',
     'appearance',
     'warnings',
     'interaction',
     'categories',
-    'virustotal',
   ];
 
   static const List<int> updateIntervalNodes = [
@@ -227,7 +225,6 @@ class SettingsPageState extends State<SettingsPage> {
       'warnings',
       'interaction',
       'categories',
-      'virustotal',
     ];
     // Each section is wrapped in a RepaintBoundary so it composites to its own
     // cached layer. The settings body is one eager Column inside a single
