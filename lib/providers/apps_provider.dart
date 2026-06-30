@@ -2490,9 +2490,7 @@ Future<bool> installApk(
     /// as when opening the file from a file manager.
     String? thirdPartyHandoffContainerPath,
   }) async {
-    if (!await VTInterceptor.shouldAllowInstall(file.appId, file.file.path, apps.values.map((e) => e.app).toList())) {
-      return false;
-    }
+
 
     final bool saveApkCopiesRequested =
         settingsProvider.saveDownloadedApkCopies &&
@@ -2502,6 +2500,10 @@ Future<bool> installApk(
         : null;
     var installReportedOk = false;
     try {
+    if (!await VTInterceptor.shouldAllowInstall(file.appId, file.file.path, apps.values.map((e) => e.app).toList())) {
+      return false;
+    }
+
       final AppInMemory? appInMemory = apps[file.appId];
       if (appInMemory != null) {
         final App app = appInMemory.app;
