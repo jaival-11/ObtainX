@@ -62,8 +62,21 @@ class VirusTotalService {
       }
 
       // ─── TIER 2: FILE UPLOAD & ANALYSIS POLLING ───────────────────────
-      final uploadUrl = Uri.parse('$_baseUrl/files');
-      final request = http.MultipartRequest('POST', uploadUrl)
+      Uri targetUploadUrl = Uri.parse('$_baseUrl/files');
+      final fileLength = await file.length();
+      
+      // ─── LARGE FILE HANDSHAKE (> 32MB) ────────────────────────────────────
+      if (fileLength > 32 * 1024 * 1024) {
+        final urlResp = await http.get(Uri.parse('$_baseUrl/files/upload_url'), headers: headers);
+        if (urlResp.statusCode == 200) {
+          final specialUrl = jsonDecode(urlResp.body)['data'];
+          if (specialUrl != null) targetUploadUrl = Uri.parse(specialUrl.toString());
+        } else {
+          return _handleApiError(urlResp.statusCode, urlResp.body);
+        }
+      }
+
+      final request = http.MultipartRequest('POST', targetUploadUrl)
         ..headers.addAll(headers)
         ..files.add(await http.MultipartFile.fromPath('file', apkFilePath));
 
