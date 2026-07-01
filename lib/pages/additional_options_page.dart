@@ -220,6 +220,12 @@ class _AdditionalOptionsPageState extends State<AdditionalOptionsPage> {
         if (appAdditionalSettings[element.key] != null) {
           element.defaultValue = appAdditionalSettings[element.key];
         }
+                if (element.key == 'vtStrictScan' && element is GeneratedFormSwitch) {
+          if (settingsProvider.vtStrictScan) {
+            element.defaultValue = true;
+            element.disabled = true;
+          }
+        }
         if (element.key == 'scanWithVirusTotal' && element is GeneratedFormSwitch) {
           final mode = settingsProvider.vtScanMode;
           if (mode == 'all') {

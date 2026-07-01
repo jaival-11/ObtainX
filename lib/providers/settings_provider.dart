@@ -91,6 +91,10 @@ class SettingsProvider with ChangeNotifier {
 
   String get vtScanMode => prefs?.getString('vtScanMode') ?? 'none';
   set vtScanMode(String value) => setSettingString('vtScanMode', value); // 'all', 'selected', 'none'
+  bool get vtStrictScan => prefs?.getBool('vtStrictScan') ?? false;
+  set vtStrictScan(bool value) => setSettingBool('vtStrictScan', value);
+
+
 
 
   static const Duration _storageAccessWarningCooldown = Duration(minutes: 5);

@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:obtainium/providers/notifications_provider.dart';
 import 'dart:convert';
 import 'dart:io';
@@ -31,8 +32,42 @@ class VTInterceptor {
       if (doScan) {
         final vtRes = await VirusTotalService.scanApk(apkFilePath, apiKey);
         if (vtRes.isError) {
-          await NativeFeatures.triggerVTError(appId);
-          return true; // Fail-open: allow install but notify user of API error
+          bool strictGlobal = prefs.getBool('vtStrictScan') ?? false;
+          bool strictApp = false;
+          
+          try {
+            // Parse Obtainium's internal app database to find the override
+            final appsJson = prefs.getStringList('apps') ?? [];
+            for (var a in appsJson) {
+              final map = jsonDecode(a);
+              if (map['id'] == appId) {
+                final additional = map['additionalAppSpecificSourceAgnosticSettings'];
+                if (additional != null && additional['vtStrictScan'] == true) {
+                  strictApp = true;
+                }
+                break;
+              }
+            }
+          } catch (_) {}
+
+          if (strictGlobal || strictApp) {
+            // STRICT MODE: Generate incident payload to trigger the Dialog & Install Anyway button
+            final payload = jsonEncode({
+              "appName": appId,
+              "title": tr('vtScanErrorTitle'),
+              "summary": tr('vtScanErrorBody', args: [appId]),
+              "detections": {"API Error": "Scan failed or timed out"},
+            });
+            final incidents = prefs.getStringList("vt_incident_unread") ?? [];
+            incidents.add(payload);
+            await prefs.setStringList("vt_incident_unread", incidents);
+            await NativeFeatures.triggerVTError(appId);
+            return false; // ABORT INSTALL
+          } else {
+            // STANDARD MODE: Fail-open
+            await NativeFeatures.triggerVTError(appId);
+            return true; 
+          }
         }
         if (!vtRes.passed) {
           try {
