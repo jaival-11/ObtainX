@@ -596,13 +596,13 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 Text(data['summary'] ?? "", style: const TextStyle(fontSize: 14)),
                 if (detections.isNotEmpty) ...[
                   const SizedBox(height: 12),
-                  Text(tr('vtFlaggedThreats'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  Text(data['isApiError'] == true ? tr('vtErrorDetails') : tr('vtFlaggedThreats'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                   const SizedBox(height: 4),
                   ...detections.entries.map((e) => Card(
                     margin: const EdgeInsets.symmetric(vertical: 4),
                     child: ListTile(
                       dense: true,
-                      leading: const Icon(Icons.warning_amber_rounded, color: Colors.redAccent),
+                      leading: Icon(data['isApiError'] == true ? Icons.error_outline : Icons.warning_amber_rounded, color: data['isApiError'] == true ? Colors.orange : Colors.redAccent),
                       title: Text(e.key, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                       subtitle: Text(e.value.toString(), style: const TextStyle(fontSize: 12)),
                     ),

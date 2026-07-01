@@ -801,5 +801,6 @@
   "vtScanErrorTitle": "VirusTotal Scan Error",
   "vtScanErrorBody": "Scan failed for {}. API error or timeout.",
   "vtStrictScan": "Strict Scan",
-  "vtStrictScanDesc": "Block installations if scan fails due to API error"
+  "vtStrictScanDesc": "Block installations if scan fails due to API error",
+  "vtErrorDetails": "Error Details"
 }

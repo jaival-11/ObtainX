@@ -31,12 +31,11 @@ class VTInterceptor {
 
       if (doScan) {
         final vtRes = await VirusTotalService.scanApk(apkFilePath, apiKey);
-        if (vtRes.isError) {
+        if (vtRes?.isError == true) {
           bool strictGlobal = prefs.getBool('vtStrictScan') ?? false;
           bool strictApp = false;
           
           try {
-            // Parse Obtainium's internal app database to find the override
             final appsJson = prefs.getStringList('apps') ?? [];
             for (var a in appsJson) {
               final map = jsonDecode(a);
@@ -50,22 +49,24 @@ class VTInterceptor {
             }
           } catch (_) {}
 
-          // ALWAYS generate incident payload so the notification click opens the dialog
+          // ALWAYS save the incident payload so the notification click triggers the dialog
           final payload = jsonEncode({
             "appName": appId,
             "title": tr('vtScanErrorTitle'),
             "summary": tr('vtScanErrorBody', args: [appId]),
-            "detections": {"API Error": "Scan failed or timed out"},
+            "detections": {"API Error": "Scan failed or timed out. Check network or API key."},
+            "isApiError": true // Special flag for the UI
           });
+          
           final incidents = prefs.getStringList("vt_incident_unread") ?? [];
           incidents.add(payload);
           await prefs.setStringList("vt_incident_unread", incidents);
           await NativeFeatures.triggerVTError(appId);
 
           if (strictGlobal || strictApp) {
-            return false; // STRICT MODE: Block install
+            return false; // STRICT: Block install and wait for override
           } else {
-            return true;  // STANDARD MODE: Fail-open (allow install)
+            return true;  // STANDARD: Allow install but keep incident available
           }
         }
         if (!vtRes.passed) {
