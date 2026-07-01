@@ -3439,6 +3439,15 @@ class _VirusTotalSectionState extends State<_VirusTotalSection> {
               ],
             ),
           ),
+            SwitchListTile(
+              title: Text(tr('vtStrictScan')),
+              subtitle: Text(tr('vtStrictScanDesc')),
+              value: sp.vtStrictScan,
+              onChanged: (val) {
+                sp.vtStrictScan = val;
+                sp.notifyListeners();
+              },
+            ),
         ],
       ),
     );

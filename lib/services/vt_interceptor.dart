@@ -50,23 +50,22 @@ class VTInterceptor {
             }
           } catch (_) {}
 
+          // ALWAYS generate incident payload so the notification click opens the dialog
+          final payload = jsonEncode({
+            "appName": appId,
+            "title": tr('vtScanErrorTitle'),
+            "summary": tr('vtScanErrorBody', args: [appId]),
+            "detections": {"API Error": "Scan failed or timed out"},
+          });
+          final incidents = prefs.getStringList("vt_incident_unread") ?? [];
+          incidents.add(payload);
+          await prefs.setStringList("vt_incident_unread", incidents);
+          await NativeFeatures.triggerVTError(appId);
+
           if (strictGlobal || strictApp) {
-            // STRICT MODE: Generate incident payload to trigger the Dialog & Install Anyway button
-            final payload = jsonEncode({
-              "appName": appId,
-              "title": tr('vtScanErrorTitle'),
-              "summary": tr('vtScanErrorBody', args: [appId]),
-              "detections": {"API Error": "Scan failed or timed out"},
-            });
-            final incidents = prefs.getStringList("vt_incident_unread") ?? [];
-            incidents.add(payload);
-            await prefs.setStringList("vt_incident_unread", incidents);
-            await NativeFeatures.triggerVTError(appId);
-            return false; // ABORT INSTALL
+            return false; // STRICT MODE: Block install
           } else {
-            // STANDARD MODE: Fail-open
-            await NativeFeatures.triggerVTError(appId);
-            return true; 
+            return true;  // STANDARD MODE: Fail-open (allow install)
           }
         }
         if (!vtRes.passed) {
