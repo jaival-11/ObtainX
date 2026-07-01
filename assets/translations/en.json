@@ -787,6 +787,15 @@
   "discardUnsavedPATChangesExplanation": "You have unsaved Personal Access Token changes. If you switch tabs, these changes will be discarded. Continue?",
   "saved": "Saved",
   "bulkScanDiscardResultsBody": "You have unsaved scan results. Leaving this page will discard the results. Continue?",
-  "vtSecurityAlertTitle": "Security Alert",
-  "vtSecurityAlertBody": "Installation blocked: {} failed VirusTotal verification. Tap report."
+  "virustotal": "VirusTotal",
+  "scanWithVirusTotal": "Scan with VirusTotal",
+  "vtScanMode": "VirusTotal Scan Mode",
+  "vtApiKey": "VirusTotal API Key",
+  "vtApiKey-creds": "VirusTotal API Key",
+  "vtFlaggedThreats": "Flagged Threats:",
+  "vtSecurityAlertsChannel": "VirusTotal Security Alerts",
+  "vtSecurityAlertsDesc": "Alerts for blocked APK installations",
+  "vtInstallAnyway": "Install Anyway",
+  "vtSecurityAlertTitle": "Security Threat Blocked",
+  "vtSecurityAlertBody": "Blocked {} update due to malware detections"
 }

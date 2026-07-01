@@ -587,7 +587,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text("VirusTotal"),
+          title: Text(tr('virustotal')),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -596,7 +596,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 Text(data['summary'] ?? "", style: const TextStyle(fontSize: 14)),
                 if (detections.isNotEmpty) ...[
                   const SizedBox(height: 12),
-                  const Text("Flagged Threats:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  Text(tr('vtFlaggedThreats'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                   const SizedBox(height: 4),
                   ...detections.entries.map((e) => Card(
                     margin: const EdgeInsets.symmetric(vertical: 4),
@@ -639,7 +639,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   ),
                 );
               },
-              child: const Text("Install Anyway"),
+              child: Text(tr('vtInstallAnyway')),
             ),
           ],
         ),
