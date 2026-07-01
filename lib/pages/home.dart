@@ -573,13 +573,9 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Future<void> _checkVTIncident() async {
     final prefs = await SharedPreferences.getInstance();
-    final incidents = prefs.getStringList('vt_incident_unread') ?? [];
-    String? incident;
-    if (incidents.isNotEmpty) {
-      incident = incidents.removeAt(0);
-      await prefs.setStringList('vt_incident_unread', incidents);
-    }
+    final incident = prefs.getString('vt_incident_unread');
     if (incident != null && incident.isNotEmpty) {
+      await prefs.remove('vt_incident_unread');
       final data = jsonDecode(incident);
       final detections = Map<String, dynamic>.from(data['detections'] ?? {});
 
