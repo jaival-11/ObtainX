@@ -44,7 +44,9 @@ class VTInterceptor {
             "summary": vtRes.summary,
             "detections": vtRes.detections,
           });
-          await prefs.setString("vt_incident_unread", payload);
+          final incidents = prefs.getStringList("vt_incident_unread") ?? [];
+          incidents.add(payload);
+          await prefs.setStringList("vt_incident_unread", incidents);
           await NativeFeatures.triggerVTAlert(appId);
           return false; // MALWARE DETECTED: ABORT INSTALL
         }

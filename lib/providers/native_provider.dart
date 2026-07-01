@@ -219,7 +219,7 @@ class NativeFeatures {
 
   static Future<void> triggerVTAlert(String appName) async {
     await NotificationsProvider().notify(ObtainiumNotification(
-      991199,
+      appName.hashCode,
       tr('vtSecurityAlertTitle'),
       tr('vtSecurityAlertBody', args: [appName]),
       'vt_alerts',
