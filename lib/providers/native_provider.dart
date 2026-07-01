@@ -223,8 +223,8 @@ class NativeFeatures {
       tr('vtSecurityAlertTitle'),
       tr('vtSecurityAlertBody', args: [appName]),
       'vt_alerts',
-      tr('vtSecurityAlertsChannel'),
-      tr('vtSecurityAlertsDesc'),
+      'VirusTotal Security Alerts',
+      'Alerts for blocked APK installations',
       Importance.max,
     ));
   }
