@@ -573,9 +573,13 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Future<void> _checkVTIncident() async {
     final prefs = await SharedPreferences.getInstance();
-    final incident = prefs.getString('vt_incident_unread');
+    final incidents = prefs.getStringList('vt_incident_unread') ?? [];
+    String? incident;
+    if (incidents.isNotEmpty) {
+      incident = incidents.removeAt(0);
+      await prefs.setStringList('vt_incident_unread', incidents);
+    }
     if (incident != null && incident.isNotEmpty) {
-      await prefs.remove('vt_incident_unread');
       final data = jsonDecode(incident);
       final detections = Map<String, dynamic>.from(data['detections'] ?? {});
 
@@ -583,7 +587,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text("VirusTotal"),
+          title: Text(tr('virustotal')),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -592,7 +596,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 Text(data['summary'] ?? "", style: const TextStyle(fontSize: 14)),
                 if (detections.isNotEmpty) ...[
                   const SizedBox(height: 12),
-                  const Text("Flagged Threats:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  Text(tr('vtFlaggedThreats'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                   const SizedBox(height: 4),
                   ...detections.entries.map((e) => Card(
                     margin: const EdgeInsets.symmetric(vertical: 4),
@@ -635,7 +639,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   ),
                 );
               },
-              child: const Text("Install Anyway"),
+              child: Text(tr('vtInstallAnyway')),
             ),
           ],
         ),
