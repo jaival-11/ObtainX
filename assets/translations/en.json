@@ -797,5 +797,7 @@
   "vtSecurityAlertsDesc": "Alerts for blocked APK installations",
   "vtInstallAnyway": "Install Anyway",
   "vtSecurityAlertTitle": "Security Threat Blocked",
-  "vtSecurityAlertBody": "Blocked {} update due to malware detections"
+  "vtSecurityAlertBody": "Blocked {} update due to malware detections",
+  "vtScanErrorTitle": "VirusTotal Scan Error",
+  "vtScanErrorBody": "Scan failed for {}. API error or timeout."
 }

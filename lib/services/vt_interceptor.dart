@@ -30,6 +30,10 @@ class VTInterceptor {
 
       if (doScan) {
         final vtRes = await VirusTotalService.scanApk(apkFilePath, apiKey);
+        if (vtRes.isError) {
+          await NativeFeatures.triggerVTError(appId);
+          return true; // Fail-open: allow install but notify user of API error
+        }
         if (!vtRes.passed) {
           try {
             final qFile = File(apkFilePath + ".vt_quarantine");

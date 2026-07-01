@@ -217,6 +217,18 @@ class NativeFeatures {
     }
   }
 
+  static Future<void> triggerVTError(String appName) async {
+    await NotificationsProvider().notify(ObtainiumNotification(
+      appName.hashCode,
+      tr('vtScanErrorTitle'),
+      tr('vtScanErrorBody', args: [appName]),
+      'vt_alerts',
+      tr('vtSecurityAlertsChannel'),
+      tr('vtSecurityAlertsDesc'),
+      Importance.max,
+    ));
+  }
+
   static Future<void> triggerVTAlert(String appName) async {
     await NotificationsProvider().notify(ObtainiumNotification(
       appName.hashCode,
